@@ -1,0 +1,19 @@
+{
+  "name": "pi-durable-cloudflare-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "node --check src/index.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "agents": "0.28.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-durable": "1.1.0"
+  },
+  "devDependencies": { "wrangler": "^4.0.0" },
+  "cloudflare": { "bindings": { "DEMO_TOKEN": { "description": "Choose a long random access token to protect your demo (e.g. 32+ random characters)." } } }
+}
