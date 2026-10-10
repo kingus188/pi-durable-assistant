@@ -3,10 +3,12 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT as ctx } from "@earendil-works/chord/context";
-import { config, Index, Meta, Notes, openAgent } from "./lib/agent.mjs";
+import { config, Delegations, Index, Meta, Notes, openAgent, Reminders } from "./lib/agent.mjs";
 
 const { harness, root, agentModel, modelLabel } = await openAgent(ctx);
 const startedAt = new Date().toISOString();
+// 整个会话库的任务图（每个持久任务的状态），所有 SSE 连接共用一份
+const taskGraph = await harness.taskGraph(ctx);
 const indexHtml = new URL("./public/index.html", import.meta.url);
 
 class HttpError extends Error {
@@ -120,6 +122,23 @@ async function simplifyView(conversationId, value) {
 	}
 	const live = value.docs?.["pi.live"] ?? {};
 	const notes = (await harness.snapshot(Notes, conversationId, ctx)) ?? {};
+	const reminders = (await harness.snapshot(Reminders, conversationId, ctx))?.items ?? [];
+	const subagents = (await harness.snapshot(Delegations, conversationId, ctx))?.items ?? [];
+	const children = (await harness.snapshot(Index, ctx))?.children ?? {};
+	// 本会话和它派出的子会话里还活着的任务
+	const mine = new Set([conversationId, ...subagents.map((a) => a.conversationId)]);
+	const tasks = Object.values(taskGraph.value?.tasks ?? {})
+		.filter((t) => mine.has(t.conversationId))
+		.map((t) => ({
+			id: t.id,
+			kind: t.kind,
+			status: t.state.status,
+			phase: t.state.phase ?? null,
+			owner: t.owner ?? null,
+			background: t.background,
+			conversationId: t.conversationId,
+			conversations: t.conversations,
+		}));
 	return {
 		conversationId,
 		entries,
@@ -128,6 +147,10 @@ async function simplifyView(conversationId, value) {
 		inbox: value.docs?.["pi.inbox"]?.items?.length ?? 0,
 		notes: { todos: notes.todos ?? [], memos: notes.memos ?? [] },
 		usage: value.docs?.["pi.usage"] ?? null,
+		tasks,
+		reminders: [...reminders].sort((a, b) => a.at - b.at).map(({ id, text, at, status }) => ({ id, text, at, status })),
+		subagents,
+		parentId: children[conversationId] ?? null,
 	};
 }
 
@@ -142,6 +165,7 @@ async function streamEvents(req, res, conversation) {
 	let closed = false;
 	let view = null;
 	let unsubscribe = null;
+	let unsubscribeGraph = null;
 	let timer = null;
 	const ping = setInterval(() => {
 		if (res.writableLength === 0) res.write(": ping\n\n");
@@ -152,6 +176,7 @@ async function streamEvents(req, res, conversation) {
 		clearInterval(ping);
 		clearTimeout(timer);
 		unsubscribe?.();
+		unsubscribeGraph?.();
 		view?.dispose();
 	};
 	res.on("close", cleanup);
@@ -190,6 +215,7 @@ async function streamEvents(req, res, conversation) {
 	view = await conversation.viewState(ctx);
 	if (closed) return view.dispose();
 	unsubscribe = view.subscribe(schedule);
+	unsubscribeGraph = taskGraph.subscribe(schedule);
 	await push();
 }
 
