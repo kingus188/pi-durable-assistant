@@ -284,12 +284,20 @@ async function route(req, res) {
 				if (item.status !== "running" || item.taskId == null) return item;
 				const task = await harness.getTask(item.taskId, ctx);
 				if (task?.state.status !== "terminal") return item;
+				if (task.state.outcome?.status === "completed") {
+					const fresh = (await harness.snapshot(BackgroundJobs, conversation.id, ctx))?.items?.find((j) => j.id === item.id);
+					if (fresh?.status !== "running") return fresh ?? item;
+				}
 				return { ...item, status: "failed", result: item.result || "后台任务异常终止；请检查服务日志" };
 			}));
 			const scheduleItems = await Promise.all((schedules?.items ?? []).map(async (item) => {
 				if (item.status !== "active" || item.jobId == null) return item;
 				const task = await harness.getTask(item.jobId, ctx);
 				if (task?.state.status !== "terminal") return item;
+				if (task.state.outcome?.status === "completed") {
+					const fresh = (await harness.snapshot(Schedules, conversation.id, ctx))?.items?.find((j) => j.id === item.id);
+					if (fresh?.status !== "active" || fresh?.jobId !== item.jobId) return fresh ?? item;
+				}
 				return { ...item, status: "failed" };
 			}));
 			return sendJson(res, 200, {
