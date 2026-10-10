@@ -6,6 +6,7 @@ import { BACKGROUND_CONTEXT as ctx } from "@earendil-works/chord/context";
 import { config, Delegations, Index, Meta, Notes, openAgent, Reminders } from "./lib/agent.mjs";
 import { Schedules, BackgroundJobs, Parents, scheduleInTx, manageScheduleInTx, backgroundInTx } from "./lib/v3.mjs";
 import { WechatChannel } from "./lib/wechat.mjs";
+import { AttachmentError, buildUserContent, imageAt, parseAttachments, splitUserContent } from "./lib/attachments.mjs";
 
 const { harness, root, agentModel, modelLabel } = await openAgent(ctx);
 const startedAt = new Date().toISOString();
@@ -54,12 +55,12 @@ function sendJson(res, status, body) {
 	res.end(payload);
 }
 
-async function readBody(req) {
+async function readBody(req, limit = 100_000) {
 	const chunks = [];
 	let size = 0;
 	for await (const chunk of req) {
 		size += chunk.length;
-		if (size > 100_000) throw new HttpError(413, "请求太大");
+		if (size > limit) throw new HttpError(413, "请求太大");
 		chunks.push(chunk);
 	}
 	if (size === 0) return {};
@@ -127,7 +128,11 @@ async function simplifyView(conversationId, value) {
 		const message = entry.model?.[0];
 		if (!message) continue;
 		if (entry.kind === "pi.user") {
-			entries.push({ id: entry.id, kind: "user", text: contentText(message.content) });
+			const { text, attachments } = splitUserContent(message.content);
+			for (const a of attachments) {
+				if (a.kind === "image" && a.index !== undefined) a.url = `/api/conversations/${conversationId}/images/${entry.id}/${a.index}`;
+			}
+			entries.push({ id: entry.id, kind: "user", text, attachments });
 		} else if (entry.kind === "pi.assistant") {
 			const parts = Array.isArray(message.content) ? message.content : [];
 			entries.push({
@@ -388,22 +393,47 @@ async function route(req, res) {
 		}
 	}
 
+	const image = method === "GET" && path.match(/^\/api\/conversations\/(\d+)\/images\/(\d+)\/(\d+)$/);
+	if (image) {
+		const conversation = await getConversation(Number(image[1]));
+		const entryId = Number(image[2]);
+		const page = await conversation.entries({ minEntryId: entryId, maxEntryId: entryId }, 1, undefined, ctx);
+		const entry = page.items?.find((e) => e.id === entryId);
+		const part = entry?.kind === "pi.user" ? imageAt(entry.model?.[0]?.content, Number(image[3])) : undefined;
+		if (!part) throw new HttpError(404, "图片不存在");
+		// 消息写入后不会再变，可以长期缓存；nosniff 防止浏览器把它当成别的类型执行
+		res.writeHead(200, {
+			"content-type": part.mimeType,
+			"cache-control": "private, max-age=31536000, immutable",
+			"x-content-type-options": "nosniff",
+		});
+		return res.end(Buffer.from(part.data, "base64"));
+	}
 	const match = path.match(/^\/api\/conversations\/(\d+)\/(events|messages|fork|abort)$/);
 	if (match) {
 		const conversation = await getConversation(Number(match[1]));
 		const action = match[2];
 		if (method === "GET" && action === "events") return streamEvents(req, res, conversation);
 		if (method === "POST" && action === "messages") {
-			const body = await readBody(req);
-			const content = String(body.text ?? "").trim();
-			if (!content) throw new HttpError(400, "消息不能为空");
-			if (content.length > 8000) throw new HttpError(413, "消息太长");
+			// 附件以 base64 放在 JSON 里，10MB 附件编码后约 13.4MB
+			const body = await readBody(req, 14_000_000);
+			const text = String(body.text ?? "").trim();
+			let files;
+			try {
+				files = parseAttachments(body.attachments);
+			} catch (error) {
+				if (error instanceof AttachmentError) throw new HttpError(400, error.message);
+				throw error;
+			}
+			if (!text && !files.length) throw new HttpError(400, "消息不能为空");
+			if (text.length > 8000) throw new HttpError(413, "消息太长");
+			const content = buildUserContent(text, files);
 			const requestId = typeof body.requestId === "string" && body.requestId ? body.requestId.slice(0, 100) : undefined;
 			const submission = await conversation.submit(
 				{ type: "input", content, requestId, whenBusy: body.mode === "steer" ? "steer" : "followUp" },
 				ctx,
 			);
-			await updateTitle(conversation.id, content.slice(0, 20));
+			await updateTitle(conversation.id, (text || `[附件] ${files[0].name}`).slice(0, 20));
 			return sendJson(res, 202, { submissionId: submission.id });
 		}
 		if (method === "POST" && action === "fork") {
