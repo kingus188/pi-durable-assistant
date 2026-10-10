@@ -33,6 +33,7 @@
   document.body.append(toggle, panel);
 
   const $ = (id) => document.getElementById(id);
+  let latestRefresh = 0;
   const currentId = () => {
     const id = location.hash.replace(/^#/, "");
     return /^\d+$/.test(id) ? id : null;
@@ -67,6 +68,7 @@
     catch (e) { say("操作失败：" + e.message); }
   }
   async function refresh() {
+    const sequence = ++latestRefresh;
     const id = currentId();
     $("v3-context").textContent = id ? "当前会话 #" + id : "请先在左侧选择一个会话";
     $("v3-schedule-form").querySelector("button[type=submit]").disabled = !id;
@@ -74,7 +76,8 @@
     $("v3-export").disabled = !id;
     if (!id || panel.hidden) return;
     try {
-      const data = await request(base() + "/management");
+      const data = await request("/api/conversations/" + id + "/management");
+      if (sequence !== latestRefresh || currentId() !== id || panel.hidden) return;
       const schedules = $("v3-schedules"); schedules.replaceChildren();
       for (const item of data.schedules || []) {
         const row = el("div", "", "v3-row");
@@ -107,7 +110,7 @@
         row.append(actions); background.append(row);
       }
       if (!background.childElementCount) background.append(el("p", "暂无后台任务", "v3-muted"));
-    } catch (e) { say("读取任务失败：" + e.message); }
+    } catch (e) { if (sequence === latestRefresh && currentId() === id && !panel.hidden) say("读取任务失败：" + e.message); }
   }
   function open(state) {
     panel.hidden = !state;
