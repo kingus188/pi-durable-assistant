@@ -34,6 +34,10 @@
 
 **尚未在 `main` 交付：** Obsidian 只读检索（[PR #4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4)）、受控工作区及审批（[PR #5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5)）、持久通知 Outbox（[PR #6](https://github.com/xiaomoBoy/pi-durable-assistant/pull/6)）。PR 的代码和自动化测试不能视为已经部署上线。
 
+## Cloudflare 版本：Pi Durable Edge
+
+[`Pi Durable Edge`](cloudflare/) 是基于 Cloudflare Workers、Durable Objects 与 PiHarness 的独立运行版本。当前 v0.1 聚焦模拟对话、持久化、任务恢复与定时唤醒，不依赖付费模型；适合低成本部署和持续迭代。原有 Docker / VPS 版本不受影响。Cloudflare 线上兼容性尚需独立验收。
+
 ## 3 分钟本地体验（不需要 API Key）
 
 需要 **Node.js ≥ 22.13**、npm 和 Git：
