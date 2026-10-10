@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/index.js && node --check public/app.js"
+    "check": "node --check src/index.js && node --check public/app.js && node scripts/verify-structure.mjs"
   },
   "dependencies": {
     "agents": "0.28.0",
