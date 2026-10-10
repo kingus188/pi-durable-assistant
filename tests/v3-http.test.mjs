@@ -26,11 +26,11 @@ async function post(origin, path, data = {}) {
   assert.equal(response.status < 400, true, JSON.stringify(body));
   return body;
 }
-async function launch(dataDir, port) {
+async function launch(dataDir, port, overrides = {}) {
   let logs = "";
   const child = spawn(process.execPath, ["server.mjs"], {
     cwd: process.cwd(),
-    env: { ...process.env, LLM_API: "faux", DATA_DIR: dataDir, PORT: String(port), NODE_ENV: "test", DEMO_PASSWORD: "", NOTIFY_MODE: "off" },
+    env: { ...process.env, LLM_API: "faux", DATA_DIR: dataDir, PORT: String(port), NODE_ENV: "test", DEMO_PASSWORD: "", NOTIFY_MODE: "off", ...overrides },
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout.on("data", (chunk) => { logs += chunk.toString(); });
@@ -160,6 +160,33 @@ test("恶意请求体与保留的幂等键返回 400，服务仍可运行", { ti
     });
     assert.equal(valid.item.status, "active");
     await post(app.origin, prefix + "/schedules/" + valid.item.id + "/cancel");
+  } finally {
+    if (app) await stop(app.child);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("生产鉴权与危险调试入口保护", { timeout: 20000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-v3-auth-"));
+  let app;
+  try {
+    app = await launch(dir, await freePort(), { NODE_ENV: "production", DEMO_PASSWORD: "test-secret" });
+    const basic = "Basic " + Buffer.from("demo:test-secret").toString("base64");
+    let res = await fetch(app.origin + "/api/info");
+    assert.equal(res.status, 401);
+    res = await fetch(app.origin + "/api/info", { headers: { authorization: "Basic invalid" } });
+    assert.equal(res.status, 401);
+    res = await fetch(app.origin + "/api/info", { headers: { authorization: basic } });
+    assert.equal(res.status, 200);
+    res = await fetch(app.origin + "/api/crash", { method: "POST", headers: { authorization: basic } });
+    assert.equal(res.status, 403);
+    res = await fetch(app.origin + "/api/conversations", {
+      method: "POST",
+      headers: { authorization: basic, origin: "https://another-example.com" },
+    });
+    assert.equal(res.status, 403);
+    res = await fetch(app.origin + "/v3.js", { headers: { authorization: basic } });
+    assert.equal(res.status, 200);
   } finally {
     if (app) await stop(app.child);
     await rm(dir, { recursive: true, force: true });
