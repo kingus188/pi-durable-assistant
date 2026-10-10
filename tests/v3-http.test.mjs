@@ -38,7 +38,7 @@ async function launch(dataDir, port, overrides = {}) {
   const origin = "http://127.0.0.1:" + port;
   for (let i = 0; i < 100; i++) {
     if (child.exitCode !== null) throw new Error("服务启动失败：" + logs);
-    try { const r = await fetch(origin + "/api/info"); if (r.ok) return { child, origin, getLogs: () => logs }; } catch {}
+    try { const r = await fetch(origin + "/api/info"); if (r.ok || r.status === 401) return { child, origin, getLogs: () => logs }; } catch {}
     await new Promise((r) => setTimeout(r, 100));
   }
   child.kill("SIGKILL");
