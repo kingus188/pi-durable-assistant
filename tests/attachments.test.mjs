@@ -45,3 +45,9 @@ test("组装后能还原正文、附件清单和图片", () => {
   assert.equal(buildUserContent("纯文字", []), "纯文字");
   assert.deepEqual(splitUserContent("纯文字"), { text: "纯文字", attachments: [] });
 });
+
+test("扩展名是文本但浏览器报了别的 MIME 时按 text/plain 处理", () => {
+  const [f] = parseAttachments([{ name: "main.ts", mimeType: "video/mp2t", data: b64("const a = 1;") }]);
+  assert.equal(f.kind, "text");
+  assert.equal(f.mimeType, "text/plain");
+});

@@ -10,11 +10,367 @@
     const seenUserMessageConvs = new Set();
     let conversationsInterval = null;
 
+    // 附件与发送状态
+    let pendingAttachments = [];
+    let isSending = false;
+
     // 吉祥物状态
     let isDisconnected = false;
     let isRecovered = false;
     let recoveredUntil = 0;
     let timerTickInterval = null;
+
+    // --- 附件校验与格式化常量 ---
+    const TEXT_EXTENSIONS = new Set([
+      'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'jsonl', 'yaml', 'yml', 'xml', 'html', 'htm', 'css',
+      'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'py', 'go', 'rs', 'java', 'kt', 'swift', 'c', 'h', 'cpp', 'hpp',
+      'cs', 'rb', 'php', 'sh', 'zsh', 'bash', 'sql', 'toml', 'ini', 'conf', 'log', 'srt', 'vtt'
+    ]);
+
+    const SUPPORTED_IMAGE_MIMES = new Set([
+      'image/png', 'image/jpeg', 'image/webp', 'image/gif'
+    ]);
+
+    function formatFileSize(bytes) {
+      if (bytes === null || bytes === undefined || isNaN(bytes)) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function showToast(message, type = 'info') {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+      }
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type} fade-in`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('toast-fadeout');
+        setTimeout(() => toast.remove(), 250);
+      }, 3500);
+    }
+
+    function cleanAttachmentName(raw) {
+      const name = String(raw ?? '').split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f"<>]/g, '').trim().slice(0, 100);
+      return name || 'attachment';
+    }
+
+    function getFileExtension(name) {
+      return name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    }
+
+    function arrayBufferToBase64(buffer) {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i += 8192) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 8192, len)));
+      }
+      return btoa(binary);
+    }
+
+    async function processAttachmentFile(file) {
+      const rawName = cleanAttachmentName(file.name);
+      const ext = getFileExtension(rawName);
+      const mime = String(file.type || '').toLowerCase().split(';')[0].trim();
+
+      // 明确拒绝 SVG
+      if (mime === 'image/svg+xml' || ext === 'svg') {
+        return { error: '暂不支持这种文件，目前支持图片和文本类文件' };
+      }
+
+      const isImage = SUPPORTED_IMAGE_MIMES.has(mime) || ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+      const isText = (mime.startsWith('text/') || TEXT_EXTENSIONS.has(ext));
+
+      if (!isImage && !isText) {
+        return { error: '暂不支持这种文件，目前支持图片和文本类文件' };
+      }
+
+      if (isImage) {
+        const isGif = mime === 'image/gif' || ext === 'gif';
+        if (isGif) {
+          if (file.size > 5 * 1024 * 1024) {
+            return { error: `GIF 动图「${rawName}」超过 5MB` };
+          }
+          const buffer = await file.arrayBuffer();
+          const base64 = arrayBufferToBase64(buffer);
+          return {
+            kind: 'image',
+            name: rawName,
+            mimeType: 'image/gif',
+            size: file.size,
+            data: base64,
+            previewUrl: URL.createObjectURL(file),
+          };
+        }
+
+        // JPEG / PNG / WebP：检查长边和文件大小判断是否需要压缩
+        let img;
+        let objUrl;
+        try {
+          objUrl = URL.createObjectURL(file);
+          img = new Image();
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = () => reject(new Error(`图片「${rawName}」加载失败`));
+            img.src = objUrl;
+          });
+        } catch (e) {
+          if (objUrl) URL.revokeObjectURL(objUrl);
+          return { error: e.message };
+        }
+
+        const width = img.naturalWidth;
+        const height = img.naturalHeight;
+        const maxDim = Math.max(width, height);
+        const needCompress = maxDim > 2048 || file.size > 1.5 * 1024 * 1024;
+
+        if (needCompress) {
+          let targetWidth = width;
+          let targetHeight = height;
+          if (maxDim > 2048) {
+            const scale = 2048 / maxDim;
+            targetWidth = Math.round(width * scale);
+            targetHeight = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetWidth, targetHeight);
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          URL.revokeObjectURL(objUrl);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const base64 = dataUrl.split(',')[1];
+          const byteSize = Math.round((base64.length * 3) / 4);
+          const newName = rawName.replace(/\.[^.]+$/, '') + '.jpg';
+
+          if (byteSize > 5 * 1024 * 1024) {
+            return { error: `图片「${newName}」超过 5MB` };
+          }
+
+          return {
+            kind: 'image',
+            name: newName,
+            mimeType: 'image/jpeg',
+            size: byteSize,
+            data: base64,
+            previewUrl: dataUrl,
+          };
+        } else {
+          if (file.size > 5 * 1024 * 1024) {
+            URL.revokeObjectURL(objUrl);
+            return { error: `图片「${rawName}」超过 5MB` };
+          }
+          const buffer = await file.arrayBuffer();
+          const base64 = arrayBufferToBase64(buffer);
+          const targetMime = mime || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
+          return {
+            kind: 'image',
+            name: rawName,
+            mimeType: targetMime,
+            size: file.size,
+            data: base64,
+            previewUrl: objUrl,
+          };
+        }
+      }
+
+      // 文本类文件
+      if (file.size > 200 * 1024) {
+        return { error: `文本文件「${rawName}」超过 200KB` };
+      }
+
+      const buffer = await file.arrayBuffer();
+      let textContent;
+      try {
+        textContent = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      } catch {
+        return { error: `「${rawName}」不是 UTF-8 文本` };
+      }
+
+      if (textContent.includes('\u0000')) {
+        return { error: `「${rawName}」不是文本文件` };
+      }
+
+      const base64 = arrayBufferToBase64(buffer);
+      const targetMime = mime || 'text/plain';
+
+      return {
+        kind: 'text',
+        name: rawName,
+        mimeType: targetMime,
+        size: file.size,
+        data: base64,
+      };
+    }
+
+    async function handleFilesSelected(fileList) {
+      const files = Array.from(fileList);
+      if (!files.length) return;
+
+      if (pendingAttachments.length + files.length > 5) {
+        showToast('一次最多上传 5 个附件', 'warning');
+        return;
+      }
+
+      let currentTotalBytes = pendingAttachments.reduce((sum, a) => sum + (a.size || 0), 0);
+
+      for (const file of files) {
+        if (pendingAttachments.length >= 5) {
+          showToast('一次最多上传 5 个附件', 'warning');
+          break;
+        }
+        try {
+          const res = await processAttachmentFile(file);
+          if (res.error) {
+            showToast(res.error, 'warning');
+            continue;
+          }
+          if (currentTotalBytes + res.size > 10 * 1024 * 1024) {
+            showToast('附件总大小不能超过 10MB', 'warning');
+            continue;
+          }
+          currentTotalBytes += res.size;
+          pendingAttachments.push(res);
+        } catch (err) {
+          showToast(err.message || '处理文件失败', 'warning');
+        }
+      }
+
+      renderPendingAttachments();
+      updateSendButtonState();
+    }
+
+    function removePendingAttachment(index) {
+      if (index >= 0 && index < pendingAttachments.length) {
+        const item = pendingAttachments[index];
+        if (item.previewUrl && item.previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+        pendingAttachments.splice(index, 1);
+        renderPendingAttachments();
+        updateSendButtonState();
+      }
+    }
+
+    function clearPendingAttachments() {
+      for (const item of pendingAttachments) {
+        if (item.previewUrl && item.previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      }
+      pendingAttachments = [];
+      renderPendingAttachments();
+      updateSendButtonState();
+    }
+
+    function renderPendingAttachments() {
+      const container = document.getElementById('attachments-preview');
+      if (!container) return;
+
+      if (pendingAttachments.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+      }
+
+      container.style.display = 'flex';
+      let html = '';
+      pendingAttachments.forEach((item, index) => {
+        if (item.kind === 'image') {
+          html += `
+            <div class="pending-chip pending-image-chip">
+              <img src="${escapeHtml(item.previewUrl)}" class="pending-thumb" alt="${escapeHtml(item.name)}">
+              <div class="pending-meta">
+                <span class="pending-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+                <span class="pending-size">${escapeHtml(formatFileSize(item.size))}</span>
+              </div>
+              <button type="button" class="btn-remove-pending" onclick="removePendingAttachment(${index})" title="移除此附件" aria-label="移除">×</button>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="pending-chip pending-text-chip">
+              <span class="pending-file-icon">📄</span>
+              <div class="pending-meta">
+                <span class="pending-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+                <span class="pending-size">${escapeHtml(formatFileSize(item.size))}</span>
+              </div>
+              <button type="button" class="btn-remove-pending" onclick="removePendingAttachment(${index})" title="移除此附件" aria-label="移除">×</button>
+            </div>
+          `;
+        }
+      });
+      container.innerHTML = html;
+    }
+
+    function updateSendButtonState() {
+      const textarea = document.getElementById('chat-textarea');
+      const btnSend = document.getElementById('btn-send');
+      if (!btnSend) return;
+
+      const text = (textarea ? textarea.value : '').trim();
+      const canSend = (text.length > 0 || pendingAttachments.length > 0) && !isSending;
+      btnSend.disabled = !canSend;
+    }
+
+    function triggerFileInput() {
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
+    }
+
+    function setupDragAndDrop() {
+      const chatColumn = document.querySelector('.chat-column');
+      const dropOverlay = document.getElementById('drop-overlay');
+      if (!chatColumn || !dropOverlay) return;
+
+      let dragCounter = 0;
+
+      chatColumn.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer && e.dataTransfer.types && (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.contains('Files'))) {
+          dragCounter++;
+          dropOverlay.style.display = 'flex';
+        }
+      });
+
+      chatColumn.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = 'copy';
+        }
+      });
+
+      chatColumn.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter <= 0) {
+          dragCounter = 0;
+          dropOverlay.style.display = 'none';
+        }
+      });
+
+      chatColumn.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        dragCounter = 0;
+        dropOverlay.style.display = 'none';
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          await handleFilesSelected(e.dataTransfer.files);
+        }
+      });
+    }
 
     // --- 小 D 矢量图形模版 ---
     const ROBOT_SVG_CONTENT = `
@@ -787,6 +1143,11 @@
           const hasError = !!e.error;
           return hasText || hasToolCalls || hasError;
         }
+        if (e.kind === 'user') {
+          const hasText = !!(e.text && e.text.trim());
+          const hasAttachments = Array.isArray(e.attachments) && e.attachments.length > 0;
+          return hasText || hasAttachments;
+        }
         return true;
       });
       const isBusy = !!view.busy || (view.live && Object.keys(view.live).length > 0);
@@ -844,13 +1205,44 @@
               container.appendChild(row);
             } else {
               // 普通用户消息
+              const hasAttachments = Array.isArray(entry.attachments) && entry.attachments.length > 0;
+              const hasText = !!(rawText && rawText.trim());
+
+              let attachmentsHtml = '';
+              if (hasAttachments) {
+                attachmentsHtml = '<div class="user-attachments-grid">';
+                for (const att of entry.attachments) {
+                  if (att.kind === 'image' && att.url) {
+                    attachmentsHtml += `
+                      <a href="${escapeHtml(att.url)}" target="_blank" rel="noopener noreferrer" class="msg-image-link" title="点击查看大图：${escapeHtml(att.name)}">
+                        <img class="msg-image-thumb" src="${escapeHtml(att.url)}" alt="${escapeHtml(att.name)}" loading="lazy">
+                      </a>
+                    `;
+                  } else {
+                    attachmentsHtml += `
+                      <div class="msg-file-card" title="${escapeHtml(att.name)}">
+                        <span class="msg-file-icon">📄</span>
+                        <div class="msg-file-details">
+                          <span class="msg-file-name">${escapeHtml(att.name)}</span>
+                          <span class="msg-file-size">${escapeHtml(formatFileSize(att.size || 0))}</span>
+                        </div>
+                      </div>
+                    `;
+                  }
+                }
+                attachmentsHtml += '</div>';
+              }
+
               const row = document.createElement('div');
               row.className = 'message-row user-row';
               row.innerHTML = `
                 <button class="fork-btn" title="从这里分叉" onclick="forkConversation('${escapeHtml(entry.id)}')">
                   <span>⑂ 从这里分叉</span>
                 </button>
-                <div class="user-bubble">${escapeHtml(rawText)}</div>
+                <div class="user-bubble ${!hasText && hasAttachments ? 'attachments-only' : ''}">
+                  ${hasAttachments ? attachmentsHtml : ''}
+                  ${hasText ? `<div class="user-text-body">${escapeHtml(rawText)}</div>` : ''}
+                </div>
               `;
               container.appendChild(row);
             }
@@ -1043,6 +1435,7 @@
         textarea.style.height = Math.min(textarea.scrollHeight, 140) + 'px';
         textarea.focus();
       }
+      updateSendButtonState();
     }
 
     function goBackToParentConversation(e) {
@@ -1357,31 +1750,60 @@
 
     // --- 消息发送与交互 ---
     async function submitMessage() {
+      if (isSending) return;
       const textarea = document.getElementById('chat-textarea');
-      const text = (textarea.value || '').trim();
-      if (!text || !currentConversationId) return;
+      const text = (textarea ? textarea.value : '').trim();
+      if (!text && pendingAttachments.length === 0) return;
+      if (!currentConversationId) return;
 
       const steerCheckbox = document.getElementById('steer-checkbox');
       const mode = steerCheckbox && steerCheckbox.checked ? 'steer' : 'followUp';
       const requestId = generateUuid();
+      const btnSend = document.getElementById('btn-send');
 
-      textarea.value = '';
-      textarea.style.height = 'auto';
+      isSending = true;
+      if (btnSend) {
+        btnSend.disabled = true;
+        btnSend.textContent = '发送中…';
+      }
+
+      const attachmentsPayload = pendingAttachments.map(att => ({
+        name: att.name,
+        mimeType: att.mimeType,
+        data: att.data,
+      }));
 
       try {
         const res = await fetch(`/api/conversations/${encodeURIComponent(currentConversationId)}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, requestId, mode }),
+          body: JSON.stringify({
+            text,
+            requestId,
+            mode,
+            attachments: attachmentsPayload,
+          }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || '发送失败');
+          throw new Error(err.error || 'HTTP ' + res.status);
         }
+        // 成功后清空输入框与待发送附件
+        if (textarea) {
+          textarea.value = '';
+          textarea.style.height = 'auto';
+        }
+        clearPendingAttachments();
         fetchConversations();
       } catch (err) {
-        alert('发送失败：' + err.message);
-        textarea.value = text;
+        showToast('发送失败：' + err.message, 'error');
+        // 出错时保留输入框内容和待发送附件，方便重试
+      } finally {
+        isSending = false;
+        if (btnSend) {
+          btnSend.textContent = '发送';
+          updateSendButtonState();
+        }
       }
     }
 
@@ -1500,16 +1922,40 @@
       fetchConversations(true);
       startTimerTick();
       startConversationsInterval();
+      setupDragAndDrop();
+
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) {
+        fileInput.addEventListener('change', async () => {
+          if (fileInput.files && fileInput.files.length > 0) {
+            await handleFilesSelected(fileInput.files);
+          }
+        });
+      }
 
       const textarea = document.getElementById('chat-textarea');
       if (textarea) {
         textarea.addEventListener('input', () => {
           textarea.style.height = 'auto';
           textarea.style.height = Math.min(textarea.scrollHeight, 140) + 'px';
+          updateSendButtonState();
+        });
+
+        textarea.addEventListener('paste', async (e) => {
+          const clipboardData = e.clipboardData;
+          if (!clipboardData || !clipboardData.files || clipboardData.files.length === 0) return;
+          const files = Array.from(clipboardData.files);
+          if (files.length > 0) {
+            e.preventDefault();
+            await handleFilesSelected(files);
+          }
         });
 
         textarea.addEventListener('compositionstart', () => { isComposing = true; });
-        textarea.addEventListener('compositionend', () => { isComposing = false; });
+        textarea.addEventListener('compositionend', () => {
+          isComposing = false;
+          updateSendButtonState();
+        });
 
         textarea.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
@@ -1518,6 +1964,13 @@
           }
         });
       }
+
+      // 手机上输入框较窄，长提示会折成两行被截断
+      if (textarea && window.matchMedia('(max-width: 860px)').matches) {
+        textarea.placeholder = '输入消息…';
+      }
+
+      updateSendButtonState();
 
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && crashModal.style.display === 'flex') {
@@ -1532,3 +1985,22 @@
         }
       });
     });
+
+    // 显式挂载到 window，确保 inline onclick 与外部完全兼容
+    window.submitMessage = submitMessage;
+    window.abortCurrentTask = abortCurrentTask;
+    window.forkConversation = forkConversation;
+    window.openCrashModal = openCrashModal;
+    window.closeCrashModal = closeCrashModal;
+    window.confirmCrash = confirmCrash;
+    window.onModalBackdropClick = onModalBackdropClick;
+    window.openSidebarDrawer = openSidebarDrawer;
+    window.closeSidebarDrawer = closeSidebarDrawer;
+    window.createNewConversation = createNewConversation;
+    window.goBackToParentConversation = goBackToParentConversation;
+    window.toggleMobileMascotBubble = toggleMobileMascotBubble;
+    window.toggleToolResultExpand = toggleToolResultExpand;
+    window.insertExamplePrompt = insertExamplePrompt;
+    window.triggerFileInput = triggerFileInput;
+    window.removePendingAttachment = removePendingAttachment;
+    window.showToast = showToast;

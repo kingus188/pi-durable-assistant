@@ -66,6 +66,19 @@
         <a id="subagent-back-link" href="#" onclick="goBackToParentConversation(event)">← 返回主对话</a>
       </div>
 
+      <!-- 拖拽上传遮罩 -->
+      <div class="drop-overlay" id="drop-overlay" style="display: none;">
+        <div class="drop-overlay-box">
+          <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <div class="drop-overlay-text">拖放文件到此处上传</div>
+          <div class="drop-overlay-sub">支持图片（PNG/JPEG/WebP/GIF）与文本类文件</div>
+        </div>
+      </div>
+
       <!-- 消息流容器 -->
       <section class="messages-container" id="messages-container" aria-live="polite">
         <!-- 动态渲染 -->
@@ -73,6 +86,9 @@
 
       <!-- 底部输入区 -->
       <footer class="input-container">
+        <!-- 待发送附件预览区 -->
+        <div class="attachments-preview" id="attachments-preview" style="display: none;"></div>
+
         <div class="input-controls">
           <div class="controls-left">
             <label class="steer-label" id="steer-toggle">
@@ -85,6 +101,18 @@
         </div>
 
         <div class="input-box-wrapper">
+          <input
+            type="file"
+            id="file-input"
+            class="file-input-hidden"
+            multiple
+            accept="image/png,image/jpeg,image/webp,image/gif,text/*,.txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.yaml,.yml,.xml,.html,.htm,.css,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.go,.rs,.java,.kt,.swift,.c,.h,.cpp,.hpp,.cs,.rb,.php,.sh,.zsh,.bash,.sql,.toml,.ini,.conf,.log,.srt,.vtt"
+          >
+          <button type="button" class="btn-attach" id="btn-attach" onclick="triggerFileInput()" title="添加附件" aria-label="添加附件">
+            <svg class="attach-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+            </svg>
+          </button>
           <textarea
             class="chat-textarea"
             id="chat-textarea"
@@ -180,6 +208,9 @@
         </button>
       </section>
 
+      <!-- 任务中心悬浮按钮占位空间（留出空间，彻底防止桌面与移动端遮挡状态卡片与崩溃按钮） -->
+      <div class="sidebar-v3-spacer"></div>
+
     </aside>
 
   </div>
@@ -201,6 +232,9 @@
       </div>
     </div>
   </div>
+
+  <!-- 全局轻提示 Toast 容器 -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script defer src="/app.js"></script>
   <script defer src="/v3.js"></script>
