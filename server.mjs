@@ -115,7 +115,8 @@ async function simplifyView(conversationId, value) {
 				kind: "tool",
 				toolCallId: message.toolCallId,
 				name: message.toolName,
-				text: contentText(message.content),
+				// 去掉 Harness 给错误结果包的 <harness> 标签，前端只显示人话
+				text: contentText(message.content).replace(/<\/?harness>/g, "").replace(/^\s*\[error\]\s*/m, "").trim(),
 				isError: Boolean(message.isError),
 			});
 		}
