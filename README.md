@@ -38,14 +38,6 @@
 
 **尚未在 `main` 交付：** 受控工作区及审批（[PR #5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5)）、持久通知 Outbox（[PR #6](https://github.com/xiaomoBoy/pi-durable-assistant/pull/6)）。只读笔记检索已在主分支实现，不依赖未合并的 [PR #4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4)。PR 的代码和自动化测试不能视为已经部署上线。
 
-## Cloudflare 版本：Pi Durable Edge
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-edge)
-
-**[Pi Durable Edge v0.2 独立维护仓库](https://github.com/xiaomoBoy/pi-durable-edge)**：Cloudflare Workers + Durable Objects + PiHarness，复用原版 UI，支持 OpenAI / Anthropic 模型配置、持久化聊天、定时提醒与 Faux 免费自检。此项目与现有 Docker / VPS 版独立维护。
-
-**[全新部署及 GitHub 自动更新教程 →](https://github.com/xiaomoBoy/pi-durable-edge/blob/main/docs/DEPLOY.md)**。维护者已拥有独立仓库时，建议在 Cloudflare **Import a repository** 直接选择 `xiaomoBoy/pi-durable-edge`；一键按钮会额外复制一个 GitHub 仓库，适合其他用户从零安装。真正的 Cloudflare 运行兼容性仍需验收。
-
 ## 3 分钟本地体验（不需要 API Key）
 
 需要 **Node.js ≥ 22.13**、npm 和 Git：
