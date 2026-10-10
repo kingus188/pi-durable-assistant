@@ -302,6 +302,7 @@ async function route(req, res) {
 		if (method === "POST" && resource === "schedules" && itemId && ["pause", "resume", "cancel"].includes(action)) {
 			try {
 				const item = await conversation.commit((tx) => manageScheduleInTx(tx, conversation.id, itemId, action), ctx);
+				if (action !== "resume") await harness.abortTask(item.jobId, ctx);
 				return sendJson(res, 200, { item });
 			} catch (error) { if (/计划任务不存在|当前状态/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
@@ -312,6 +313,7 @@ async function route(req, res) {
 				reminder.status = "cancelled";
 				return reminder;
 			}, ctx);
+			await harness.abortTask(item.id, ctx);
 			return sendJson(res, 200, { item });
 		}
 		if (method === "POST" && resource === "background" && !itemId) {
@@ -329,10 +331,7 @@ async function route(req, res) {
 				job.status = "cancelled";
 				return { ...job };
 			}, ctx);
-			if (item.conversationId != null) {
-				const child = await harness.conversation(item.conversationId, ctx);
-				if (child) await child.abort(ctx);
-			}
+			await harness.abortTask(item.taskId, ctx);
 			return sendJson(res, 200, { item });
 		}
 	}
