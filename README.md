@@ -85,3 +85,11 @@ GitHub 上 Pi Durable 的 README 比 1.1.0 发布版新，照着写会踩坑：
 ## 许可
 
 MIT
+
+## v3 任务中心
+
+右下角新增「任务中心」：创建一次性/周期任务，暂停、继续、取消；管理后台子 Agent 和原有提醒；导出 Markdown 会话。Agent 还可调用 schedule_task 与 delegate_background 工具。周期任务和后台子 Agent 由 Durable 持久化，进程重启后恢复。
+
+可选环境变量 NOTIFY_WEBHOOK_URL、NOTIFY_WEBHOOK_KIND=generic|feishu、NOTIFY_MODE=errors|all|off，默认仅失败推送。Docker 生产模式必须设置 DEMO_PASSWORD；模拟崩溃需显式设置 ENABLE_CRASH_DEMO=1。
+
+验证方式：npm run check && npm test。设计限制、API 和后续计划见 [docs/V3_PLAN.md](docs/V3_PLAN.md)。

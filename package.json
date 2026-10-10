@@ -4,10 +4,14 @@
   "private": true,
   "description": "一个网页版个人 Agent，演示 Pi Durable 的断点恢复、Document、后台任务、子 Agent、Fork 和多端同步",
   "type": "module",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "start": "node server.mjs",
-    "dev": "sh scripts/dev.sh"
+    "dev": "sh scripts/dev.sh",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check server.mjs && node --check lib/agent.mjs && node --check lib/v3.mjs && node --check lib/v3-utils.mjs && node --check public/v3.js"
   },
   "dependencies": {
     "@earendil-works/chord": "1.1.0",
