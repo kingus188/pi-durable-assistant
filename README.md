@@ -40,11 +40,11 @@
 
 ## Cloudflare 版本：Pi Durable Edge
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-assistant/tree/main/cloudflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-edge)
 
-[`Pi Durable Edge`](cloudflare/) 是基于 Cloudflare Workers、Durable Objects 与 PiHarness 的独立版本。当前 v0.1 聚焦模拟对话、持久化、恢复和定时唤醒，不调用付费模型。点击上方按钮，登录 Cloudflare 并按页面提示填写 `ACCESS_TOKEN`，Worker 与 SQLite-backed Durable Object 将由 Cloudflare 自动创建。**不需要购买 VPS、Containers 或在本机安装 Node.js。**
+**[Pi Durable Edge v0.2 独立维护仓库](https://github.com/xiaomoBoy/pi-durable-edge)**：Cloudflare Workers + Durable Objects + PiHarness，复用原版 UI，支持 OpenAI / Anthropic 模型配置、持久化聊天、定时提醒与 Faux 免费自检。此项目与现有 Docker / VPS 版独立维护。
 
-**[完整部署教程、测试与故障排查 →](cloudflare/docs/DEPLOY.md)**。原有 Docker / VPS 版本不受影响；实际 Cloudflare 线上运行仍需验收。
+**[全新部署及 GitHub 自动更新教程 →](https://github.com/xiaomoBoy/pi-durable-edge/blob/main/docs/DEPLOY.md)**。维护者已拥有独立仓库时，建议在 Cloudflare **Import a repository** 直接选择 `xiaomoBoy/pi-durable-edge`；一键按钮会额外复制一个 GitHub 仓库，适合其他用户从零安装。真正的 Cloudflare 运行兼容性仍需验收。
 
 ## 3 分钟本地体验（不需要 API Key）
 
