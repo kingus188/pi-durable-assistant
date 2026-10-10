@@ -53,6 +53,18 @@
 | 任务一直 pending | 模拟工具、定时 Alarm 或免费额度限制 | 运行网页自检，检查 Workers 日志与 Dashboard 用量 |
 | 部署按钮提示无法导入 | GitHub 授权或子目录导入失败 | 查看 GitHub 授权，或按下面的 Wrangler 备用方案部署 |
 
+### Cloudflare 显示“构建已过期 / Build expired”
+
+该提示**不等同于源代码编译失败**。需要先区分部署是否已建立：
+
+1. 登录 [Cloudflare Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages)，检查是否已有 `pi-durable-edge`。
+2. **已经有 Worker：**进入项目 → **Deployments（部署）** → **View Build History（查看构建历史）** → 找到对应构建 → 点击 **Retry build（重试构建）**。尽量保留原项目，避免重新从一键部署按钮重复创建。
+3. **尚未创建 Worker：**关闭已经过期的一键部署页面，用 README 里的 Deploy to Cloudflare 按钮重新开启一次全新的导入流程；选择 Worker 名 `pi-durable-edge`。
+4. 如果重试后显示 `Build was timed out`，Cloudflare Workers Builds 的单次构建上限为 **20 分钟**。进入构建详情查看发生超时的实际阶段，而不是修改 Token 或盲目重试。
+5. 如果出现具体编译失败信息，请复制 **Build Details** 中最后一段错误日志（去掉账户 ID、密钥等敏感信息）；GitHub Actions 的 `wrangler deploy --dry-run` 成功，不能代替 Cloudflare 账户的真实部署验证。
+
+参考：[Cloudflare 官方 Workers Builds 故障排查](https://developers.cloudflare.com/workers/ci-cd/builds/troubleshoot/)。
+
 ### 备用：Wrangler 手动部署（只在按钮失败时使用）
 
 在装有 Node.js 22+ 的电脑上运行：
