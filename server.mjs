@@ -311,7 +311,7 @@ async function route(req, res) {
 				const reminder = (await tx.doc(Reminders, conversation.id)).items.find((it) => String(it.id) === itemId);
 				if (!reminder || reminder.status !== "scheduled") throw new HttpError(400, "提醒已结束或不存在");
 				reminder.status = "cancelled";
-				return reminder;
+				return { id: reminder.id, text: reminder.text, status: reminder.status, at: reminder.at };
 			}, ctx);
 			await harness.abortTask(item.id, ctx);
 			return sendJson(res, 200, { item });
