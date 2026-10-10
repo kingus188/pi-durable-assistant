@@ -1,1 +1,2 @@
-ACCESS_TOKEN=replace-with-at-least-32-random-characters
+ACCESS_TOKEN=CHANGE_ME
+# Cloudflare Deploy button prompts for a new secret; never deploy a shared placeholder.
