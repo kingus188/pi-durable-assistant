@@ -1,21 +1,21 @@
-# Pi Durable Cloudflare Demo
+# Pi Durable Edge
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-assistant/tree/main/cloudflare)
 
-> 原项目：[xiaomoBoy/pi-durable-assistant](https://github.com/xiaomoBoy/pi-durable-assistant)。此目录是单独的 Cloudflare Workers 小应用，不影响原项目的 Docker / VPS 部署。**这是未经过 Cloudflare 实际部署验证的 Beta 最小移植，平台兼容性以部署日志为准。**
+> 原项目：[xiaomoBoy/pi-durable-assistant](https://github.com/xiaomoBoy/pi-durable-assistant)。Pi Durable Edge 是原项目的 Cloudflare Workers 版本，不影响原项目的 Docker / VPS 部署。**当前处于 v0.1 初始开发阶段，计划持续迭代；尚未在真实 Cloudflare 账户验证运行，Beta 兼容性以部署日志为准。**
 
-## 范围和原理
+## 当前版本范围和原理
 
 - **真实 Pi Durable 1.1.0 + Cloudflare PiHarness**：从原项目移植 `faux` 剧本和 `wait_seconds` 记忆截止时间的策略。每条消息创建 Durable operation，Pi 的 transcript、任务及检查点存在 SQLite-backed Durable Object 中。
 - **模拟回复（零模型费用）**：`faux` 不是通用 AI，所有输入都执行 12 秒等待，最后输出固定中文提示。不接外部 API，也不需要 Workers AI。
-- **持久定时提醒**：使用 Agents SDK `schedule()` 和 SQLite `demo_reminders` 表，实例未活跃时由 Alarms 唤醒。只在网页显示提醒是否触发，**不发送手机推送**。
-- **隔离**：单用户、单 Durable Object；不包含多会话、微信桥、Subagent、生产模型、上传附件或多租户。
+- **持久定时提醒**：使用 Agents SDK `schedule()` 和 SQLite `edge_reminders` 表，实例未活跃时由 Alarms 唤醒。只在网页显示提醒是否触发，**不发送手机推送**。
+- **隔离**：当前初始版本为单用户、单 Durable Object；多会话、微信桥、Subagent、生产模型、上传附件及多租户暂未实现。
 
 ## 一键部署
 
 1. 登录 Cloudflare Free 账户，点击顶部 **Deploy to Cloudflare**。
-2. Cloudflare 从公开 GitHub 仓库的 `cloudflare/` 子目录克隆此应用，并自动创建 Worker + SQLite-backed Durable Object。确认 Worker 名 `pi-durable-cloudflare-demo`。
-3. 为 `DEMO_TOKEN` 填写至少 24 字符的随机访问令牌。建议生成：`openssl rand -hex 24`。如果部署面板没有提供密钥输入栏，部署后在 Worker **Settings → Variables and Secrets** 添加 `DEMO_TOKEN` Secret，再重新部署/保存。
+2. Cloudflare 从公开 GitHub 仓库的 `cloudflare/` 子目录克隆此应用，并自动创建 Worker + SQLite-backed Durable Object。确认 Worker 名 `pi-durable-edge`。
+3. 为 `ACCESS_TOKEN` 填写至少 24 字符的随机访问令牌。建议生成：`openssl rand -hex 24`。如果部署面板没有提供密钥输入栏，部署后在 Worker **Settings → Variables and Secrets** 添加 `ACCESS_TOKEN` Secret，再重新部署/保存。
 4. 打开分配的 `*.workers.dev` URL，输入同一个 Token 并连接。
 5. 发送一条消息，12 秒后刷新状态看到固定回复；创建一个 10 秒提醒，到期后刷新页面看到“已触发”。
 
@@ -52,9 +52,13 @@ npm run dev
 
 - 不调用任何真实 AI 模型：模型费 **$0**；不用 Containers、不需要 Workers Paid。
 - 平台预计在低频测试的免费额度内，但 **真实远程部署尚未验收**；参考 [Durable Objects 定价](https://developers.cloudflare.com/durable-objects/platform/pricing/) 与 [PiHarness 文档](https://developers.cloudflare.com/agents/harnesses/pi/)。
-- Worker 默认公开静态页面，API 必须使用 Cloudflare 侧 `DEMO_TOKEN` Secret。建议另外设置 Cloudflare Access；本 Demo 不适合存储机密内容，也没有账号系统和细粒度限流。
+- Worker 默认公开静态页面，API 必须使用 Cloudflare 侧 `ACCESS_TOKEN` Secret。建议另外设置 Cloudflare Access；当前版本不适合存储机密内容，也没有账号系统和细粒度限流。
 - API 返回和状态不会暴露 Token。浏览器令牌仅存储于当前标签页的 `sessionStorage`，不作为 URL 参数。
 - 当前版本定时提醒由 Agents Scheduler 的持久化存储执行，聊天恢复由 PiHarness 执行。**两者不是同一张任务表；提醒只保存 fired 状态，不会提交给 Pi 对话。**
+
+## 后续方向
+
+后续可逐步增加真实模型、多会话、子 Agent、持久通知和微信桥接，不牺牲现有 Pi Durable 的恢复语义；所有功能以实际合并、测试通过的版本为准。
 
 ## 兼容性与版本
 
