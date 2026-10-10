@@ -205,20 +205,22 @@
       z-index: 100;
     }
     .sidebar-left-header {
-      padding: 16px 18px;
+      padding: 16px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
+      gap: 12px;
       border-bottom: 1px solid var(--border);
     }
     .brand-wrap {
       display: flex;
       align-items: center;
       gap: 8px;
+      white-space: nowrap;
     }
     .brand-icon {
       width: 24px;
       height: 24px;
+      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -235,6 +237,16 @@
       background: var(--primary-gradient);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      white-space: nowrap;
+    }
+    .sidebar-left-header .btn-new-conv {
+      width: 100%;
+      justify-content: center;
+      padding: 8px 14px;
+      font-size: 13.5px;
+      font-weight: 600;
+      box-sizing: border-box;
+      white-space: nowrap;
     }
     .btn-new-conv {
       display: inline-flex;
@@ -1766,6 +1778,8 @@
     let previousBoots = null;
     let isComposing = false;
     let autoScrollChat = true;
+    const seenUserMessageConvs = new Set();
+    let conversationsInterval = null;
 
     // 吉祥物状态
     let isDisconnected = false;
@@ -1951,6 +1965,12 @@
         .join(' · ');
     }
 
+    function getLastNonEmptyLine(output) {
+      if (!output || typeof output !== 'string') return '';
+      const lines = output.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      return lines.length > 0 ? lines[lines.length - 1] : '';
+    }
+
     function formatUsageTokens(usage) {
       if (!usage) return '0';
       if (usage.models) {
@@ -2029,33 +2049,36 @@
       updateMascotState();
     }
 
-    async function fetchConversations() {
+    async function fetchConversations(isInitial = false) {
       try {
         const res = await fetch('/api/conversations');
         if (!res.ok) throw new Error('拉取会话列表失败');
         conversations = await res.json();
         renderConversationList();
+        updateConversationHeaders();
 
-        const hashId = parseHashConversationId();
-        if (hashId !== null) {
-          const exists = conversations.some(c => String(c.id) === String(hashId));
-          if (exists) {
+        if (isInitial || !currentConversationId) {
+          const hashId = parseHashConversationId();
+          if (hashId !== null) {
+            const exists = conversations.some(c => String(c.id) === String(hashId));
+            if (exists) {
+              if (String(currentConversationId) !== String(hashId)) {
+                selectConversation(hashId);
+              }
+              return;
+            }
+            // 如果不在列表中（可能是子 Agent 会话），直接打开
             if (String(currentConversationId) !== String(hashId)) {
               selectConversation(hashId);
+              return;
             }
-            return;
           }
-          // 如果不在列表中（可能是子 Agent 会话），直接打开
-          if (String(currentConversationId) !== String(hashId)) {
-            selectConversation(hashId);
-            return;
-          }
-        }
 
-        if (conversations.length > 0) {
-          selectConversation(conversations[0].id);
-        } else {
-          await createNewConversation();
+          if (conversations.length > 0) {
+            selectConversation(conversations[0].id);
+          } else {
+            await createNewConversation();
+          }
         }
       } catch (err) {
         console.error('拉取会话列表出错:', err);
@@ -2281,7 +2304,8 @@
         const waitTool = runningTools.find(t => t.name === 'wait_seconds' || t.name === '等待');
         let remainStr = '';
         if (waitTool && waitTool.output) {
-          const match = waitTool.output.match(/还剩\s*(\d+)\s*秒/);
+          const lastLine = getLastNonEmptyLine(waitTool.output);
+          const match = lastLine.match(/还剩\s*(\d+)\s*秒/);
           if (match) remainStr = `还剩 ${match[1]} 秒`;
         }
         if (!remainStr && waitTool && waitTool.args && waitTool.args.seconds) {
@@ -2382,12 +2406,29 @@
         renderEmptyConversation(container);
       }
 
+      // 5. 会话列表标题刷新：当前会话的 view 里第一次出现 user 消息时拉取
+      const hasUserMsg = Array.isArray(view.entries) && view.entries.some(e => e.kind === 'user');
+      if (hasUserMsg && currentConversationId && !seenUserMessageConvs.has(String(currentConversationId))) {
+        seenUserMessageConvs.add(String(currentConversationId));
+        fetchConversations();
+      }
+
       // 建立工具执行结果映射
       const toolResultsMap = new Map();
       if (Array.isArray(view.entries)) {
         for (const entry of view.entries) {
           if (entry.kind === 'tool' && entry.toolCallId) {
-            toolResultsMap.set(entry.toolCallId, entry);
+            toolResultsMap.set(String(entry.toolCallId), entry);
+          }
+        }
+      }
+
+      // 建立 live 工具运行槽映射 (按 callId 索引)
+      const liveToolsMap = new Map();
+      if (view.live && Array.isArray(view.live.tools)) {
+        for (const slot of view.live.tools) {
+          if (slot && slot.callId) {
+            liveToolsMap.set(String(slot.callId), slot);
           }
         }
       }
@@ -2435,9 +2476,10 @@
             // 附带的工具调用卡片（含 delegate 子 Agent）
             if (Array.isArray(entry.toolCalls) && entry.toolCalls.length > 0) {
               for (const call of entry.toolCalls) {
-                renderedToolCallIds.add(call.id);
-                const result = toolResultsMap.get(call.id);
-                assistantHtml += renderToolCardHtml(call.name, call.args, result, view.subagents);
+                renderedToolCallIds.add(String(call.id));
+                const result = toolResultsMap.get(String(call.id));
+                const runningSlot = liveToolsMap.get(String(call.id));
+                assistantHtml += renderToolCardHtml(call.name, call.args, result, view.subagents, runningSlot);
               }
             }
             assistantHtml += '</div>';
@@ -2445,7 +2487,7 @@
             row.innerHTML = assistantHtml;
             container.appendChild(row);
           } else if (entry.kind === 'tool') {
-            if (!renderedToolCallIds.has(entry.toolCallId)) {
+            if (!renderedToolCallIds.has(String(entry.toolCallId))) {
               const row = document.createElement('div');
               row.className = 'message-row assistant-row';
               row.innerHTML = `
@@ -2464,40 +2506,59 @@
 
       if (isBusy) {
         const liveInfo = extractLiveInfo(view.live);
-        const liveRow = document.createElement('div');
-        liveRow.className = 'message-row assistant-row';
+        const hasRunningTools = !!(liveInfo && Array.isArray(liveInfo.runningTools) && liveInfo.runningTools.length > 0);
+        const hasLiveGeneration = !!(view.live && view.live.generation);
 
-        let liveInner = '<div class="assistant-wrapper">';
+        // 3. 有工具在运行时，不要再显示“正在思考…”气泡；只有 live.generation 存在且没有工具在运行时才显示。
+        const showThinkingBubble = hasLiveGeneration && !hasRunningTools;
 
-        if (liveInfo && liveInfo.text) {
-          liveInner += `
-            <div class="assistant-bubble">
-              ${escapeHtml(liveInfo.text)}<span class="cursor-blink"></span>
-            </div>
-          `;
-        } else if (liveInfo && liveInfo.thinking) {
-          liveInner += `
-            <div class="live-bubble">
-              💭 正在思考：${escapeHtml(liveInfo.thinking)}<span class="cursor-blink"></span>
-            </div>
-          `;
-        } else {
-          liveInner += `
-            <div class="live-bubble">
-              <span class="thinking-dots">正在思考<span>.</span><span>.</span><span>.</span></span>
-            </div>
-          `;
-        }
+        // 过滤掉已经在 assistant toolCall 中渲染过的运行中工具卡片
+        const unrenderedRunningTools = hasRunningTools
+          ? liveInfo.runningTools.filter(t => !t.callId || !renderedToolCallIds.has(String(t.callId)))
+          : [];
 
-        if (liveInfo && liveInfo.runningTools && liveInfo.runningTools.length > 0) {
-          for (const t of liveInfo.runningTools) {
-            liveInner += renderRunningToolCardHtml(t.name, t.args, t.output);
+        const hasLiveText = !!(liveInfo && liveInfo.text);
+        const hasThinkingText = !!(showThinkingBubble && liveInfo && liveInfo.thinking);
+        const shouldRenderLiveRow = hasLiveText || hasThinkingText || showThinkingBubble || unrenderedRunningTools.length > 0;
+
+        if (shouldRenderLiveRow) {
+          const liveRow = document.createElement('div');
+          liveRow.className = 'message-row assistant-row';
+
+          let liveInner = '<div class="assistant-wrapper">';
+
+          if (hasLiveText) {
+            liveInner += `
+              <div class="assistant-bubble">
+                ${escapeHtml(liveInfo.text)}<span class="cursor-blink"></span>
+              </div>
+            `;
+          } else if (showThinkingBubble) {
+            if (hasThinkingText) {
+              liveInner += `
+                <div class="live-bubble">
+                  💭 正在思考：${escapeHtml(liveInfo.thinking)}<span class="cursor-blink"></span>
+                </div>
+              `;
+            } else {
+              liveInner += `
+                <div class="live-bubble">
+                  <span class="thinking-dots">正在思考<span>.</span><span>.</span><span>.</span></span>
+                </div>
+              `;
+            }
           }
-        }
 
-        liveInner += '</div>';
-        liveRow.innerHTML = liveInner;
-        container.appendChild(liveRow);
+          if (unrenderedRunningTools.length > 0) {
+            for (const t of unrenderedRunningTools) {
+              liveInner += renderRunningToolCardHtml(t.name, t.args, t.output);
+            }
+          }
+
+          liveInner += '</div>';
+          liveRow.innerHTML = liveInner;
+          container.appendChild(liveRow);
+        }
       }
 
       // 5. 渲染侧边栏各面板
@@ -2568,8 +2629,8 @@
       }
     }
 
-    // 工具卡片构造（支持 delegate 子 Agent 样式）
-    function renderToolCardHtml(name, args, result, subagents) {
+    // 工具卡片构造（支持 delegate 子 Agent 样式与实时 runningSlot 输出）
+    function renderToolCardHtml(name, args, result, subagents, runningSlot) {
       const isDone = !!result;
       const isError = result && !!result.isError;
       const resultText = result ? (result.text || '') : '';
@@ -2577,6 +2638,7 @@
       const previewText = isLong ? resultText.slice(0, 200) + '…' : resultText;
 
       const isSubagent = (name === 'delegate');
+      const runningOutput = runningSlot ? getLastNonEmptyLine(runningSlot.output) : '';
 
       // 子 Agent 专用卡片样式
       if (isSubagent) {
@@ -2625,14 +2687,18 @@
                   >展开全文（共 ${resultText.length} 字）</button>
                 ` : ''}
               </div>
-            ` : ''}
+            ` : `
+              <div class="tool-result-box" style="color: ${runningOutput ? 'var(--primary)' : 'var(--text-muted)'}; font-size: 12.5px;">
+                ${escapeHtml(runningOutput || '正在执行…')}
+              </div>
+            `}
           </div>
         `;
       }
 
       // 普通工具卡片
       const badgeClass = isError ? 'badge error' : (isDone ? 'badge done' : 'badge running');
-      const badgeText = isError ? '执行失败' : (isDone ? '已完成' : '执行中');
+      const badgeText = isError ? '执行失败' : (isDone ? '已完成' : '运行中');
 
       return `
         <div class="tool-card ${isError ? 'error' : ''}">
@@ -2654,8 +2720,8 @@
               ` : ''}
             </div>
           ` : `
-            <div class="tool-result-box" style="color: var(--text-muted); font-size: 12px;">
-              正在执行…
+            <div class="tool-result-box" style="color: ${runningOutput ? 'var(--primary)' : 'var(--text-muted)'}; font-size: 12.5px;">
+              ${escapeHtml(runningOutput || '正在执行…')}
             </div>
           `}
         </div>
@@ -2663,6 +2729,7 @@
     }
 
     function renderRunningToolCardHtml(name, args, output) {
+      const lastLine = getLastNonEmptyLine(output);
       return `
         <div class="tool-card">
           <div class="tool-card-header">
@@ -2671,7 +2738,7 @@
           </div>
           ${args ? `<div class="tool-args-box">${escapeHtml(formatToolArgs(args))}</div>` : ''}
           <div class="tool-result-box" style="color: var(--primary); font-size: 12.5px;">
-            ${output ? escapeHtml(output) : '执行中…'}
+            ${escapeHtml(lastLine || '执行中…')}
           </div>
         </div>
       `;
@@ -2994,12 +3061,21 @@
       }, 1000);
     }
 
+    // --- 定时拉取会话列表（每 10 秒刷新一次会话列表标题） ---
+    function startConversationsInterval() {
+      if (conversationsInterval) clearInterval(conversationsInterval);
+      conversationsInterval = setInterval(() => {
+        fetchConversations();
+      }, 10000);
+    }
+
     // --- 事件监听与初始化 ---
     window.addEventListener('DOMContentLoaded', () => {
       setupMascotSvgs();
       fetchServerInfo();
-      fetchConversations();
+      fetchConversations(true);
       startTimerTick();
+      startConversationsInterval();
 
       const textarea = document.getElementById('chat-textarea');
       if (textarea) {
