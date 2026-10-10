@@ -53,6 +53,19 @@
 | 任务一直 pending | 模拟工具、定时 Alarm 或免费额度限制 | 运行网页自检，检查 Workers 日志与 Dashboard 用量 |
 | 部署按钮提示无法导入 | GitHub 授权或子目录导入失败 | 查看 GitHub 授权，或按下面的 Wrangler 备用方案部署 |
 
+### Cloudflare 提示 GitHub 授权过期（Your GitHub authorization has expired）
+
+这说明 **Cloudflare GitHub App 的授权失效**，不是 Pi Durable Edge 的源码编译错误；修改 `ACCESS_TOKEN` 或反复 Retry Build 都不会解决授权问题。
+
+1. 打开 [GitHub → Settings → Applications → Installed GitHub Apps](https://github.com/settings/installations)，找到 **Cloudflare Workers and Pages**，点击 **Configure**。
+2. 官方建议在 App 设置页面底部点击 **Uninstall**，卸载旧安装。
+3. 回到 [Cloudflare Workers & Pages](https://dash.cloudflare.com/) → **Create application → Pages → Connect to Git → Add account → Install & Authorize**，重新连接当前 GitHub 账户。如果是组织仓库，应由组织有权限的管理员安装。
+4. 再点击 README 顶部 **Deploy to Cloudflare**，重新开始导入。不需要修改代码，也不需要为此升级付费套餐。
+
+**影响范围：** 卸载会暂时阻断这个 GitHub 账户此前连接的其他 Cloudflare Workers/Pages 项目的自动构建；线上已有部署仍继续运行。重新安装后，请检查其他项目的 Git 集成是否恢复。若暂时不希望卸载，可以先尝试 Cloudflare Workers & Pages → 项目 → Settings → Builds → Git Repository → Manage，检查现有安装授权状态。
+
+官方文档：[Cloudflare Workers GitHub integration — Reinstall the Cloudflare GitHub App](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/github-integration/#reinstall-the-cloudflare-github-app)。
+
 ### Cloudflare 显示“构建已过期 / Build expired”
 
 该提示**不等同于源代码编译失败**。需要先区分部署是否已建立：
