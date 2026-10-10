@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT as ctx } from "@earendil-works/chord/context";
 import { config, Delegations, Index, Meta, Notes, openAgent, Reminders } from "./lib/agent.mjs";
+import { Schedules, BackgroundJobs, scheduleInTx, manageScheduleInTx, backgroundInTx } from "./lib/v3.mjs";
 
 const { harness, root, agentModel, modelLabel } = await openAgent(ctx);
 const startedAt = new Date().toISOString();
@@ -230,6 +231,10 @@ async function route(req, res) {
 		res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
 		return res.end(await readFile(indexHtml));
 	}
+	if (method === "GET" && path === "/v3.js") {
+		res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
+		return res.end(await readFile(new URL("./public/v3.js", import.meta.url)));
+	}
 	if (method === "GET" && path === "/api/info") {
 		const meta = await harness.snapshot(Meta, ctx);
 		return sendJson(res, 200, { model: modelLabel, api: config.api, pid: process.pid, startedAt, boots: meta?.boots ?? 0 });
@@ -248,10 +253,88 @@ async function route(req, res) {
 		}
 	}
 	if (method === "POST" && path === "/api/crash") {
+		if (process.env.NODE_ENV === "production" && process.env.ENABLE_CRASH_DEMO !== "1") throw new HttpError(403, "生产环境已禁用模拟崩溃");
 		sendJson(res, 200, { ok: true });
 		console.log("收到模拟崩溃请求，200ms 后退出");
 		setTimeout(() => process.exit(1), 200);
 		return;
+	}
+
+
+	// v3 管理接口：数据和任务的变更都经过 Durable 的原子事务。
+	const manage = path.match(/^\/api\/conversations\/(\d+)\/(management|export\.md|schedules|background|reminders)(?:\/([0-9a-f-]+))?(?:\/(pause|resume|cancel|stop))?$/);
+	if (manage) {
+		const conversation = await getConversation(Number(manage[1]));
+		const [, , resource, itemId, action] = manage;
+		if (method === "GET" && resource === "management" && !itemId) {
+			const [schedules, background, reminders] = await Promise.all([
+				harness.snapshot(Schedules, conversation.id, ctx),
+				harness.snapshot(BackgroundJobs, conversation.id, ctx),
+				harness.snapshot(Reminders, conversation.id, ctx),
+			]);
+			return sendJson(res, 200, {
+				schedules: schedules?.items ?? [],
+				background: background?.items ?? [],
+				reminders: reminders?.items ?? [],
+			});
+		}
+		if (method === "GET" && resource === "export.md" && !itemId) {
+			const view = await conversation.viewState(ctx);
+			try {
+				const entries = (await simplifyView(conversation.id, view.value)).entries;
+				const md = ["# Pi Durable 会话 " + conversation.id, "",
+					...entries.filter((entry) => entry.kind === "user" || entry.kind === "assistant")
+						.map((entry) => "## " + (entry.kind === "user" ? "用户" : "助手") + "\n\n" + entry.text + "\n")].join("\n");
+				res.writeHead(200, { "content-type": "text/markdown; charset=utf-8",
+					"content-disposition": 'attachment; filename="conversation-' + conversation.id + '.md"',
+					"cache-control": "no-store" });
+				return res.end(md);
+			} finally { view.dispose(); }
+		}
+		if (method === "POST" && resource === "schedules" && !itemId) {
+			const body = await readBody(req);
+			try {
+				const item = await conversation.commit((tx) =>
+					scheduleInTx(tx, conversation.id, body, typeof body.requestId === "string" ? body.requestId.slice(0, 100) : null), ctx);
+				return sendJson(res, 201, { item });
+			} catch (error) { if (/任务内容|首次执行|重复间隔/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+		}
+		if (method === "POST" && resource === "schedules" && itemId && ["pause", "resume", "cancel"].includes(action)) {
+			try {
+				const item = await conversation.commit((tx) => manageScheduleInTx(tx, conversation.id, itemId, action), ctx);
+				return sendJson(res, 200, { item });
+			} catch (error) { if (/计划任务不存在|当前状态/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+		}
+		if (method === "POST" && resource === "reminders" && itemId && action === "cancel") {
+			const item = await conversation.commit(async (tx) => {
+				const reminder = (await tx.doc(Reminders, conversation.id)).items.find((it) => String(it.id) === itemId);
+				if (!reminder || reminder.status !== "scheduled") throw new HttpError(400, "提醒已结束或不存在");
+				reminder.status = "cancelled";
+				return reminder;
+			}, ctx);
+			return sendJson(res, 200, { item });
+		}
+		if (method === "POST" && resource === "background" && !itemId) {
+			const body = await readBody(req);
+			try {
+				const item = await conversation.commit((tx) =>
+					backgroundInTx(tx, conversation.id, body, typeof body.requestId === "string" ? body.requestId.slice(0, 100) : null), ctx);
+				return sendJson(res, 201, { item });
+			} catch (error) { if (/后台任务说明/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+		}
+		if (method === "POST" && resource === "background" && itemId && action === "stop") {
+			const item = await conversation.commit(async (tx) => {
+				const job = (await tx.doc(BackgroundJobs, conversation.id)).items.find((it) => it.id === itemId);
+				if (!job || job.status !== "running") throw new HttpError(400, "任务已结束或不存在");
+				job.status = "cancelled";
+				return { ...job };
+			}, ctx);
+			if (item.conversationId != null) {
+				const child = await harness.conversation(item.conversationId, ctx);
+				if (child) await child.abort(ctx);
+			}
+			return sendJson(res, 200, { item });
+		}
 	}
 
 	const match = path.match(/^\/api\/conversations\/(\d+)\/(events|messages|fork|abort)$/);
@@ -312,6 +395,9 @@ const server = createServer(async (req, res) => {
 	}
 });
 
+if (process.env.NODE_ENV === "production" && !config.password) {
+	throw new Error("生产环境必须设置 DEMO_PASSWORD");
+}
 server.listen(config.port, "0.0.0.0", () => {
 	console.log(`pi-durable-demo 已启动：端口 ${config.port}，模型 ${modelLabel}，PID ${process.pid}`);
 });
