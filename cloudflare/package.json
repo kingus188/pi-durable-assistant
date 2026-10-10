@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -14,6 +16,15 @@
     "@earendil-works/pi-ai": "1.1.0",
     "@earendil-works/pi-durable": "1.1.0"
   },
-  "devDependencies": { "wrangler": "^4.0.0" },
-  "cloudflare": { "bindings": { "ACCESS_TOKEN": { "description": "Choose a long random access token to protect your Pi Durable Edge instance (e.g. 32+ random characters)." } } }
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "ACCESS_TOKEN": {
+        "description": "**Required.** Your private access token for Pi Durable Edge (at least 24 characters). Use a unique random secret (`openssl rand -hex 24`), never commit it to Git, and enter it again when connecting to the deployed app."
+      }
+    }
+  },
+  "description": "Pi Durable Edge: free-tier-friendly serverless Pi Durable assistant on Cloudflare Workers and Durable Objects"
 }
