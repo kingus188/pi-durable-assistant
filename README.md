@@ -36,7 +36,11 @@
 
 ## Cloudflare 版本：Pi Durable Edge
 
-[`Pi Durable Edge`](cloudflare/) 是基于 Cloudflare Workers、Durable Objects 与 PiHarness 的独立运行版本。当前 v0.1 聚焦模拟对话、持久化、任务恢复与定时唤醒，不依赖付费模型；适合低成本部署和持续迭代。原有 Docker / VPS 版本不受影响。Cloudflare 线上兼容性尚需独立验收。
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-assistant/tree/main/cloudflare)
+
+[`Pi Durable Edge`](cloudflare/) 是基于 Cloudflare Workers、Durable Objects 与 PiHarness 的独立版本。当前 v0.1 聚焦模拟对话、持久化、恢复和定时唤醒，不调用付费模型。点击上方按钮，登录 Cloudflare 并按页面提示填写 `ACCESS_TOKEN`，Worker 与 SQLite-backed Durable Object 将由 Cloudflare 自动创建。**不需要购买 VPS、Containers 或在本机安装 Node.js。**
+
+**[完整部署教程、测试与故障排查 →](cloudflare/docs/DEPLOY.md)**。原有 Docker / VPS 版本不受影响；实际 Cloudflare 线上运行仍需验收。
 
 ## 3 分钟本地体验（不需要 API Key）
 
