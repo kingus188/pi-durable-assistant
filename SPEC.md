@@ -1,6 +1,8 @@
-# Pi Durable Demo 规格说明
+# Pi Durable Demo — 技术规格与版本记录
 
-一个网页版个人 Agent（类似 Grok Bot、GPT Dots 的极简版），用来演示 Pi Durable 的五个概念：持久化存储、断点恢复、Document、Fork、多端同步。它是一篇中文长文的配套 Demo，追求简单、可读、能稳定截图，不追求功能多。
+> **当前版本：v3 第一阶段，已合并到 main。** 本文件保留 v1/v2 的设计记录，其中部分段落描述的是当时的目标而不是当前行为。**当前功能、运行步骤和安全约束以 [README.md](README.md) 及 [docs/V3_PLAN.md](docs/V3_PLAN.md) 为准**；v3 增量规则见文末。
+
+项目最初是用于演示持久存储、断点恢复、Document、Fork 和多端同步的网页版个人 Agent。v3 在保留演示用途的同时，新增可管理的周期任务、后台子 Agent、Webhooks、Markdown 导出及回归测试。仍保持单用户、易读和最少依赖的方向。
 
 本文件由 Claude 编写，下面的 API 用法都已在 `@earendil-works/pi-durable@1.1.0` 上核对过；写代码时以 `node_modules/@earendil-works/*/dist/**/*.d.ts` 和 `node_modules/@earendil-works/pi-durable/README.md` 为准，不要凭记忆编 API。
 
@@ -8,7 +10,7 @@
 
 - Node ≥ 22.13，纯 JavaScript ESM（`.mjs`），**不要 TypeScript、不要构建步骤、不要前端框架**。
 - 依赖只有 `package.json` 里已有的三个包，加 Node 内置模块。不新增 npm 依赖。
-- 后端一个文件 `server.mjs`（可拆出 `lib/*.mjs`，但总量保持在约 500 行内）；前端一个文件 `public/index.html`（内联 CSS 和 JS）。
+- 后端以 `server.mjs` 路由和 `lib/*.mjs` 能力模块组织；保留原生 JavaScript ESM。前端基础界面在 `public/index.html`，v3 管理抽屉在 `public/v3.js`，无构建步骤。
 - 界面文字用简体中文，中文标点用全角。
 - 代码注释用中文，少而准。
 
@@ -16,15 +18,19 @@
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `PORT` | `3000` | 监听端口，监听 `0.0.0.0` |
+| `PORT` | `3000` | 监听端口；无密码且非生产模式绑定 `127.0.0.1`，有密码时绑定 `0.0.0.0` |
 | `DATA_DIR` | `./data` | SQLite 文件放在 `${DATA_DIR}/agent.sqlite` |
-| `DEMO_PASSWORD` | 空 | 非空时整个站点（含 SSE）开启 HTTP Basic Auth，用户名固定 `demo` |
+| `DEMO_PASSWORD` | 空 | 全站（含 SSE）HTTP Basic Auth，用户名固定 `demo`；**生产模式必须设置** |
 | `LLM_API` | `openai-completions` | 可选 `openai-completions`、`openai-responses`、`anthropic-messages`、`faux` |
 | `LLM_BASE_URL` | 空 | 例如 `http://sub2api:8080/v1`；`anthropic-messages` 时按 pi-ai 约定填 |
 | `LLM_API_KEY` | 空 | 只从环境变量读，**绝不打印、不写日志、不返回给前端** |
 | `LLM_MODEL` | 空 | 模型 ID |
 | `LLM_CONTEXT_WINDOW` | `128000` | |
 | `LLM_MAX_TOKENS` | `8192` | |
+| `NOTIFY_WEBHOOK_URL` | 空 | 可选通知接收端 URL；未设置不对外推送 |
+| `NOTIFY_WEBHOOK_KIND` | `generic` | `generic` 或 `feishu` |
+| `NOTIFY_MODE` | `errors` | `errors` 只推送明确失败的后台任务；`all` 才会推送正常提醒/计划触发；`off` 禁用 |
+| `ENABLE_CRASH_DEMO` | `0` | 生产模式只有显式设为 `1` 才允许模拟崩溃 |
 
 ## 模型接入（已核对）
 
@@ -79,9 +85,13 @@ import { Type } from "@earendil-works/pi-ai";
 import { createRegistry, defineDoc, defineExtension, defineTool, Harness, section } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 
-const harness = await Harness.open(await openNodeSqliteStorage(file), { models, registry }, ctx);
-harness.resume();                                   // 启动时继续上个进程没做完的任务
-harness.closed.then(() => process.exit(1));         // 存储出错会自行关闭，直接退出让 Docker 拉起
+const harness = await Harness.open(
+  await openNodeSqliteStorage(file),
+  { models, registry, onReport: (error) => console.error("Harness 报告：", error?.message) },
+  ctx,
+);
+harness.resume(); // 启动时继续上个进程没做完的任务
+// 注意：1.1.0 没有 harness.closed；参见 server.mjs 的致命存储异常处理。
 ```
 
 - 一个存储文件同时只能被一个进程打开。
@@ -154,7 +164,7 @@ const Meta = defineDoc({
 | POST | `/api/conversations/:id/messages` | body `{ text, requestId, mode: "followUp" \| "steer" }`；会话标题还是“新对话”时用前 20 字改标题 |
 | POST | `/api/conversations/:id/fork` | body `{ entryId }`，新会话标题“分叉：原标题”，记 `forkOf`、`forkAtEntry`，返回 `{ id }` |
 | POST | `/api/conversations/:id/abort` | 停止当前任务 |
-| POST | `/api/crash` | 先返回 `{ ok: true }`，200ms 后 `process.exit(1)`，模拟进程崩溃 |
+| POST | `/api/crash` | 演示模式先返回 `{ ok: true }`，再退出进程；生产模式默认 403，仅 `ENABLE_CRASH_DEMO=1` 放开 |
 
 SSE `view` 数据：
 
@@ -181,7 +191,7 @@ SSE 要发心跳注释（每 15 秒 `: ping`），连接关闭时 `unsubscribe` 
 三栏，手机上自动变单栏（会话列表收进顶部抽屉，记事本放到对话下方）：
 
 - 左栏：会话列表（标题、时间，分叉的会话前加“⑂”），顶部“新对话”按钮。
-- 中栏：消息流。用户消息靠右；助手消息靠左，支持简单换行，不需要 Markdown 渲染；工具调用显示成小卡片（工具名＋参数摘要＋结果前 200 字，可展开）；运行中显示流式文字或“正在思考…”；每条用户消息悬停出现“从这里分叉”。底部输入框，Enter 发送，Shift+Enter 换行；忙碌时显示“插话（steer）”开关和“停止”按钮。
+- 中栏：消息流。用户消息靠右；助手消息靠左，支持简化 Markdown 渲染；工具调用显示成小卡片（工具名＋参数摘要＋结果前 200 字，可展开）；运行中显示流式文字或“正在思考…”；每条用户消息悬停出现“从这里分叉”。底部输入框，Enter 发送，Shift+Enter 换行；忙碌时显示“插话（steer）”开关和“停止”按钮。
 - 右栏：“记事本”（待办带勾选状态、备忘列表）＋“运行状态”卡片（进程 PID、启动时间、第几次启动、模型名、本会话 token 用量）＋红色“模拟崩溃”按钮（点击二次确认）。
 - 断线时顶部出现黄色横条“与服务器断开，正在重连…”，`EventSource` 自动重连后横条消失，并重新拉 `/api/info`（PID 和启动次数会变，这是演示重点）。
 - URL 带 `#会话ID`，刷新后停在同一会话；另一台设备打开同一 URL 能实时看到同一对话（多端同步）。
@@ -226,7 +236,7 @@ SSE 要发心跳注释（每 15 秒 `: ping`），连接关闭时 `unsubscribe` 
     // status：pending / running / waiting / completing
   ],
   reminders: [ // 本会话的提醒，按时间排序
-    { id, text, at /* 毫秒时间戳 */, status: "scheduled" | "fired" }
+    { id, text, at /* 毫秒时间戳 */, status: "scheduled" | "fired" | "cancelled" }
   ],
   subagents: [ // 本会话派出的子 Agent
     { conversationId, task, status: "running" | "done" }
@@ -291,6 +301,21 @@ SSE 要发心跳注释（每 15 秒 `: ping`），连接关闭时 `unsubscribe` 
 
 ---
 
-# v3（2026-10-10）
+# v3（2026-10-10，已合并到 main）
 
-以 docs/V3_PLAN.md 为新增规格和交付验收标准。新增持久计划、后台子 Agent、可选通知、任务中心、Markdown 导出与自动化测试；保留 v1/v2 原有 API。v3 目前不提供精确 Cron、通知 outbox、多租户隔离和完整成本核算。
+v3 使用现有 `@earendil-works/pi-durable@1.1.0`，没有引入新的运行依赖；新增 `lib/v3.mjs` 和 `lib/v3-utils.mjs` 承担周期计划、后台子 Agent 和任务参数校验，`public/v3.js` 提供独立的可管理抽屉。
+
+核心新增对象与操作：
+- `app.v3.schedules` 文档 / `app.v3.schedule` Task：固定分钟间隔的单次或重复计划；带版本号和幂等请求 ID，可暂停、恢复、取消。
+- `app.v3.background` 文档 / `app.v3.background-agent` Task：会话拥有的后台任务、Task 拥有的子会话，完成后通过 follow-up 回传结果；支持停止。
+- `app.v3.parents` Session 文档：后台子会话返回主会话的导航。
+- 原有 `app.reminder` Task：可以在新任务中心取消，并支持可选通知。
+- `GET /api/conversations/:id/management`：读取计划、提醒和后台任务，包括异常终结状态。
+- `POST /api/conversations/:id/schedules`：创建计划；`POST /schedules/:uuid/pause|resume|cancel` 对当前会话的计划执行状态变更（完整路径以 docs/V3_PLAN.md 为准）。
+- `POST /api/conversations/:id/background` / `.../background/:uuid/stop`：后台子 Agent。
+- `GET /api/conversations/:id/export.md`：导出用户和助手的可见文字。
+- 可选 Webhook：`NOTIFY_WEBHOOK_KIND=generic|feishu`，`NOTIFY_MODE=errors|all|off`，当前为尽力投递而非持久重试。
+- `npm run check` 和 `npm test`：合并前 8 项自动化测试通过，含无 Key `faux` 崩溃恢复/安全回归。
+
+**当前 v3 的剩余限制**：不支持精确 Cron / 具备时区语义的日历任务、通知 outbox 与保证送达、完整模型计费、多用户隔离、长会话增量 SSE 或真实生产 VPS 端到端测试。有关每个 API 的入参、部署与第二阶段计划，请阅读 [docs/V3_PLAN.md](docs/V3_PLAN.md)。
+
