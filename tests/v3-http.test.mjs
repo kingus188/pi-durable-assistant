@@ -134,3 +134,34 @@ test("计划触发与后台子 Agent 在进程重启后继续完成", { timeout:
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("恶意请求体与保留的幂等键返回 400，服务仍可运行", { timeout: 20000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-v3-validation-"));
+  let app;
+  try {
+    app = await launch(dir, await freePort());
+    const { id } = await post(app.origin, "/api/conversations");
+    const prefix = "/api/conversations/" + id;
+    for (const malformed of ["null", "[]", '"hello"', "not-json"]) {
+      const response = await fetch(app.origin + prefix + "/schedules", {
+        method: "POST", headers: { "content-type": "application/json" }, body: malformed,
+      });
+      assert.equal(response.status, 400, "should reject " + malformed);
+    }
+    for (const invalidKey of ["__proto__", "constructor", "prototype"]) {
+      const response = await fetch(app.origin + prefix + "/schedules", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "test", minutesFromNow: 1, requestId: invalidKey }),
+      });
+      assert.equal(response.status, 400, invalidKey);
+    }
+    const valid = await post(app.origin, prefix + "/schedules", {
+      text: "valid", minutesFromNow: 1, requestId: "valid-1",
+    });
+    assert.equal(valid.item.status, "active");
+    await post(app.origin, prefix + "/schedules/" + valid.item.id + "/cancel");
+  } finally {
+    if (app) await stop(app.child);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
