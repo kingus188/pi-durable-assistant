@@ -8,7 +8,7 @@ services:
     # 进程崩溃后自动拉起，这是“断点恢复”演示的一半
     restart: unless-stopped
     env_file: .env
-    # 只绑本机回环，方便用 SSH 隧道自测；对外由 nginx 通过容器名反代
+    # 只绑本机回环；对外请用 nginx 等反向代理，并设置 DEMO_PASSWORD
     ports:
       - "127.0.0.1:${HOST_PORT:-3300}:3000"
     volumes:
@@ -20,14 +20,6 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
-    networks:
-      - default
-      - sub2api
 
 volumes:
   pi-durable-demo-data:
-
-networks:
-  sub2api:
-    external: true
-    name: ${SUB2API_NETWORK:-sub2api-deploy_sub2api-network}
