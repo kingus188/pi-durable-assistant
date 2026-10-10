@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Pi Durable 小助手</title>
   <link rel="stylesheet" href="/style.css">
-
 </head>
 <body>
 
@@ -28,79 +27,166 @@
         <svg class="mascot-svg" viewBox="0 0 100 100" id="mobile-mascot-svg">
           <!-- 动态内联 SVG -->
         </svg>
-        <div class="mascot-bubble" id="mobile-mascot-bubble">
-          <div class="bubble-tag" id="mobile-bubble-tag">就绪</div>
-          <div class="bubble-text" id="mobile-bubble-text">小 D 等待任务</div>
+        <div class="mobile-mascot-popup" id="mobile-mascot-popup">
+          <div style="font-weight:700; color:var(--primary); margin-bottom:3px;">小 D</div>
+          <div id="mobile-mascot-text">有事叫我～</div>
         </div>
       </div>
+      <button class="btn-new-conv" onclick="createNewConversation()">＋ 新建</button>
     </div>
   </header>
 
-  <!-- 侧边栏 -->
-  <aside id="sidebar" class="sidebar">
-    <div class="sidebar-header">
-      <div class="logo">
-        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-        <span>Pi Durable</span>
-      </div>
-      <button class="icon-btn" id="btn-new-chat" title="新建会话" onclick="createConversation()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
-    </div>
-    <div class="sidebar-list" id="conversation-list"></div>
-    <div class="sidebar-footer">
-      <div class="status-pill" id="status-pill">
-        <span class="status-dot"></span>
-        <span id="status-text">就绪</span>
-      </div>
-    </div>
-  </aside>
+  <!-- 主布局 -->
+  <div class="app-layout">
 
-  <!-- 主内容 -->
-  <main class="main">
-    <header class="main-header">
-      <button class="icon-btn mobile-only" id="btn-open-sidebar" onclick="openSidebarDrawer()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-      </button>
-      <div class="header-title">
-        <div class="robot-icon desktop-only" id="desktop-robot"></div>
-        <div>
-          <h1 id="desktop-title">新对话</h1>
-          <p id="desktop-meta" class="meta">选择或创建一个会话开始</p>
+    <!-- 左栏：会话列表 -->
+    <aside class="sidebar-left" id="sidebar-left">
+      <div class="sidebar-left-header">
+        <div class="brand-wrap">
+          <div class="brand-icon">D</div>
+          <span class="brand-title">Pi Durable 小助手</span>
         </div>
+        <button class="btn-new-conv" onclick="createNewConversation()">＋ 新对话</button>
       </div>
-      <div class="header-actions">
-        <button class="icon-btn" id="btn-crash" title="模拟崩溃" onclick="showCrashModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/></svg>
+      <nav class="conversation-list" id="conversation-list" aria-label="会话列表">
+        <!-- 动态渲染 -->
+      </nav>
+    </aside>
+
+    <!-- 中栏：消息流与输入 -->
+    <main class="chat-column">
+      <header class="chat-header">
+        <h2 class="chat-header-title" id="desktop-current-title">新对话</h2>
+        <span class="chat-header-meta" id="desktop-current-meta"></span>
+      </header>
+
+      <!-- 子 Agent 提示条 -->
+      <div id="subagent-parent-banner" class="subagent-parent-banner" style="display: none;">
+        <span>这是子 Agent 的对话</span>
+        <a id="subagent-back-link" href="#" onclick="goBackToParentConversation(event)">← 返回主对话</a>
+      </div>
+
+      <!-- 消息流容器 -->
+      <section class="messages-container" id="messages-container" aria-live="polite">
+        <!-- 动态渲染 -->
+      </section>
+
+      <!-- 底部输入区 -->
+      <footer class="input-container">
+        <div class="input-controls">
+          <div class="controls-left">
+            <label class="steer-label" id="steer-toggle">
+              <input type="checkbox" id="steer-checkbox">
+              <span>插话（steer）</span>
+            </label>
+            <button class="btn-abort" id="btn-abort" onclick="abortCurrentTask()">⏹ 停止</button>
+          </div>
+          <span class="inbox-badge" id="inbox-badge">排队中：0 条</span>
+        </div>
+
+        <div class="input-box-wrapper">
+          <textarea
+            class="chat-textarea"
+            id="chat-textarea"
+            placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"
+            rows="1"
+          ></textarea>
+          <button class="btn-send" id="btn-send" onclick="submitMessage()">发送</button>
+        </div>
+      </footer>
+    </main>
+
+    <!-- 右栏：小 D、记事本、定时提醒、持久任务、运行状态 -->
+    <aside class="sidebar-right" id="sidebar-right">
+
+      <!-- 1. 吉祥物小 D 卡片 -->
+      <section class="card mascot-card" id="mascot-card" data-state="idle">
+        <div class="mascot-bubble" id="mascot-bubble">
+          <span id="mascot-text">有事叫我～</span>
+        </div>
+        <div class="mascot-stage">
+          <svg class="mascot-svg" id="mascot-svg" viewBox="0 0 100 100">
+            <!-- 动态生成机器人矢量 -->
+          </svg>
+        </div>
+        <div class="mascot-footer">
+          <span class="mascot-name">小 D 助手</span>
+          <span class="mascot-status-tag" id="mascot-status-tag">空闲中</span>
+        </div>
+      </section>
+
+      <!-- 2. 记事本卡片 -->
+      <section class="card" id="notes-card">
+        <div class="card-title">📝 记事本</div>
+        <div class="notes-section">
+          <div class="notes-subtitle">待办事项</div>
+          <div class="todo-list" id="todo-list">
+            <span class="empty-placeholder">暂无待办事项</span>
+          </div>
+        </div>
+        <div class="notes-section">
+          <div class="notes-subtitle">备忘录</div>
+          <div class="memo-list" id="memo-list">
+            <span class="empty-placeholder">暂无备忘录</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. 定时提醒面板 -->
+      <section class="card" id="reminders-card">
+        <div class="card-title">⏰ 定时提醒</div>
+        <div class="reminder-list" id="reminder-list">
+          <span class="empty-placeholder">暂无定时提醒</span>
+        </div>
+      </section>
+
+      <!-- 4. 任务面板：持久任务（每一步都有检查点） -->
+      <section class="card" id="tasks-card">
+        <div class="card-title">⚡ 持久任务（每一步都有检查点）</div>
+        <div class="task-tree" id="task-tree">
+          <span class="empty-placeholder">空闲，没有正在运行的任务</span>
+        </div>
+      </section>
+
+      <!-- 5. 运行状态卡片 -->
+      <section class="card" id="status-card">
+        <div class="card-title">⚙️ 运行状态</div>
+        <div class="stat-list">
+          <div class="stat-row">
+            <span class="stat-label">启动次数</span>
+            <span class="boots-badge" id="stat-boots">第 1 次启动</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">进程 PID</span>
+            <span class="stat-value" id="stat-pid">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">启动时间</span>
+            <span class="stat-value" id="stat-started-at" style="font-size: 11.5px;">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">模型</span>
+            <span class="stat-value" id="stat-model" style="font-size: 12px;">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">会话 Token</span>
+            <span class="stat-value" id="stat-tokens">-</span>
+          </div>
+        </div>
+
+        <!-- 模拟崩溃按钮 -->
+        <button class="btn-crash" onclick="openCrashModal()">
+          💥 模拟进程崩溃
         </button>
-      </div>
-    </header>
+      </section>
 
-    <div class="chat-area" id="chat-area">
-      <div class="messages" id="messages"></div>
-      <div class="live-row" id="live-row"></div>
-    </div>
+    </aside>
 
-    <form class="composer" id="composer" onsubmit="sendMessage(event)">
-      <div class="composer-inner">
-        <textarea id="input" rows="1" placeholder="给小 D 发送任务…" oninput="autoResize(this)"></textarea>
-        <div class="composer-actions">
-          <button type="button" class="mode-btn" id="mode-btn" onclick="toggleMode()">跟进</button>
-          <button type="submit" class="send-btn" id="send-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-          </button>
-        </div>
-      </div>
-    </form>
-  </main>
+  </div>
 
-  <!-- 任务中心抽屉触发器已移到 v3.js -->
-
-  <!-- 崩溃确认弹窗 -->
-  <div class="modal" id="crash-modal" hidden>
-    <div class="modal-content">
+  <!-- 模拟崩溃二次确认弹窗 -->
+  <div class="modal-overlay" id="crash-modal" onclick="onModalBackdropClick(event)">
+    <div class="modal-card">
       <div class="modal-header">
         ⚠️ 确认模拟进程崩溃？
       </div>
@@ -116,8 +202,7 @@
     </div>
   </div>
 
-  <script src="/app.js" defer></script>
-
+  <script defer src="/app.js"></script>
   <script defer src="/v3.js"></script>
 </body>
 </html>

@@ -21,7 +21,13 @@ const wechat = wechatEnabled ? new WechatChannel({
 if (wechat) await wechat.start();
 // 整个会话库的任务图（每个持久任务的状态），所有 SSE 连接共用一份
 const taskGraph = await harness.taskGraph(ctx);
-const indexHtml = new URL("./public/index.html", import.meta.url);
+const publicFile = (name) => new URL(`./public/${name}`, import.meta.url);
+const staticAssets = {
+	"/": { file: publicFile("index.html"), type: "text/html; charset=utf-8" },
+	"/style.css": { file: publicFile("style.css"), type: "text/css; charset=utf-8" },
+	"/app.js": { file: publicFile("app.js"), type: "text/javascript; charset=utf-8" },
+	"/v3.js": { file: publicFile("v3.js"), type: "text/javascript; charset=utf-8" },
+};
 
 class HttpError extends Error {
 	constructor(status, message) {
@@ -251,21 +257,11 @@ async function route(req, res) {
 	const method = req.method;
 	if (method !== "GET" && !sameOrigin(req)) throw new HttpError(403, "只接受同源请求");
 
-	if (method === "GET" && path === "/") {
-		res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-		return res.end(await readFile(indexHtml));
-	}
-	if (method === "GET" && path === "/v3.js") {
-		res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
-		return res.end(await readFile(new URL("./public/v3.js", import.meta.url)));
-	}
-	if (method === "GET" && path === "/style.css") {
-		res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": "no-store" });
-		return res.end(await readFile(new URL("./public/style.css", import.meta.url)));
-	}
-	if (method === "GET" && path === "/app.js") {
-		res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
-		return res.end(await readFile(new URL("./public/app.js", import.meta.url)));
+	const asset = method === "GET" && staticAssets[path];
+	if (asset) {
+		const body = await readFile(asset.file);
+		res.writeHead(200, { "content-type": asset.type, "cache-control": "no-store" });
+		return res.end(body);
 	}
 	if (method === "GET" && path === "/api/wechat/status") {
     return sendJson(res, 200, wechat ? await wechat.status() : { enabled: false });
@@ -353,14 +349,14 @@ async function route(req, res) {
 				const item = await conversation.commit((tx) =>
 					scheduleInTx(tx, conversation.id, body, body.requestId ?? null), ctx);
 				return sendJson(res, 201, { item });
-			} catch (error) { if (/\u4efb务内容|首次执行|重复间隔|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+			} catch (error) { if (/任务内容|首次执行|重复间隔|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
 		if (method === "POST" && resource === "schedules" && itemId && ["pause", "resume", "cancel"].includes(action)) {
 			try {
 				const item = await conversation.commit((tx) => manageScheduleInTx(tx, conversation.id, itemId, action), ctx);
 				if (action !== "resume") await harness.abortTask(item.jobId, ctx);
 				return sendJson(res, 200, { item });
-			} catch (error) { if (/\u8ba1划任务不存在|当前状态/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+			} catch (error) { if (/计划任务不存在|当前状态/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
 		if (method === "POST" && resource === "reminders" && itemId && action === "cancel") {
 			const item = await conversation.commit(async (tx) => {
@@ -378,7 +374,7 @@ async function route(req, res) {
 				const item = await conversation.commit((tx) =>
 					backgroundInTx(tx, conversation.id, body, body.requestId ?? null), ctx);
 				return sendJson(res, 201, { item });
-			} catch (error) { if (/\u540e台任务说明|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+			} catch (error) { if (/后台任务说明|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
 		if (method === "POST" && resource === "background" && itemId && action === "stop") {
 			const item = await conversation.commit(async (tx) => {
