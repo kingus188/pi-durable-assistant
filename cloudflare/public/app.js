@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-let token = sessionStorage.getItem('piDemoToken') || '';
+let token = sessionStorage.getItem('piEdgeToken') || '';
 let busy = false;
 let polls = 0;
 let pollTimer;
@@ -13,7 +13,7 @@ function element(tag, className, text) {
   return node;
 }
 async function api(path, options = {}) {
-  if (!token) throw new Error('请先输入 DEMO_TOKEN');
+  if (!token) throw new Error('请先输入 ACCESS_TOKEN');
   const response = await fetch(path, {
     ...options,
     headers: { Authorization: 'Bearer ' + token, ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
@@ -63,7 +63,7 @@ async function refresh(quiet = false) {
 }
 $('connect').addEventListener('click', () => {
   token = $('token').value.trim();
-  sessionStorage.setItem('piDemoToken', token);
+  sessionStorage.setItem('piEdgeToken', token);
   polls = 0;
   refresh();
 });
