@@ -1,1 +1,99 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Pi Durable 小助手</title>
+  <link rel="stylesheet" href="/style.css">
+
+</head>
+<body>
+
+  <!-- 断线重连顶部横条 -->
+  <div id="reconnect-banner" class="reconnect-banner">
+    <div class="reconnect-spinner"></div>
+    <span>与服务器断开，正在重连…</span>
+  </div>
+
+  <!-- 移动端抽屉遮罩 -->
+  <div id="drawer-backdrop" class="drawer-backdrop" onclick="closeSidebarDrawer()"></div>
+
+  <!-- 侧边栏 -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <span>Pi Durable</span>
+      </div>
+      <button class="icon-btn" id="btn-new-chat" title="新建会话" onclick="createConversation()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+    <div class="sidebar-list" id="conversation-list"></div>
+    <div class="sidebar-footer">
+      <div class="status-pill" id="status-pill">
+        <span class="status-dot"></span>
+        <span id="status-text">就绪</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容 -->
+  <main class="main">
+    <header class="main-header">
+      <button class="icon-btn mobile-only" id="btn-open-sidebar" onclick="openSidebarDrawer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+      <div class="header-title">
+        <div class="robot-icon desktop-only" id="desktop-robot"></div>
+        <div>
+          <h1 id="desktop-title">新对话</h1>
+          <p id="desktop-meta" class="meta">选择或创建一个会话开始</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btn-crash" title="模拟崩溃" onclick="showCrashModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="chat-area" id="chat-area">
+      <div class="messages" id="messages"></div>
+      <div class="live-row" id="live-row"></div>
+    </div>
+
+    <form class="composer" id="composer" onsubmit="sendMessage(event)">
+      <div class="composer-inner">
+        <textarea id="input" rows="1" placeholder="给小 D 发送任务…" oninput="autoResize(this)"></textarea>
+        <div class="composer-actions">
+          <button type="button" class="mode-btn" id="mode-btn" onclick="toggleMode()">跟进</button>
+          <button type="submit" class="send-btn" id="send-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </div>
+      </div>
+    </form>
+  </main>
+
+  <!-- 任务中心抽屉触发器已移到 v3.js -->
+
+  <!-- 崩溃确认弹窗 -->
+  <div class="modal" id="crash-modal" hidden>
+    <div class="modal-content">
+      <h3>模拟进程崩溃</h3>
+      <p>将强制终止当前进程（用于演示断点恢复）。确认继续？</p>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="hideCrashModal()">取消</button>
+        <button class="btn-danger" id="btn-modal-confirm" onclick="confirmCrash()">确认崩溃</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js" defer></script>
+
+  <script defer src="/v3.js"></script>
+</body>
+</html>
