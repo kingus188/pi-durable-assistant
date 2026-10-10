@@ -70,6 +70,10 @@ test("创建、管理、持久化和导出接口（无需 API Key）", { timeout
     await post(app.origin, prefix + "/schedules/" + created.item.id + "/pause");
     await post(app.origin, prefix + "/schedules/" + created.item.id + "/resume");
     await post(app.origin, prefix + "/schedules/" + created.item.id + "/cancel");
+    const retryCancelled = await post(app.origin, prefix + "/schedules", {
+      text: "检查项目", minutesFromNow: 10, everyMinutes: 30, requestId: "test-schedule",
+    });
+    assert.equal(retryCancelled.item.status, "cancelled");
     const management = await (await fetch(app.origin + prefix + "/management")).json();
     assert.equal(management.schedules.length, 1);
     assert.equal(management.schedules[0].status, "cancelled");
@@ -148,7 +152,7 @@ test("恶意请求体与保留的幂等键返回 400，服务仍可运行", { ti
       });
       assert.equal(response.status, 400, "should reject " + malformed);
     }
-    for (const invalidKey of ["__proto__", "constructor", "prototype"]) {
+    for (const invalidKey of ["__proto__", "constructor", "prototype", "x".repeat(101)]) {
       const response = await fetch(app.origin + prefix + "/schedules", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: "test", minutesFromNow: 1, requestId: invalidKey }),
