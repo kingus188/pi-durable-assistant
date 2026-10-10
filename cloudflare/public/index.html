@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pi Durable · Cloudflare Demo</title>
+  <title>Pi Durable Edge</title>
   <style>
     :root{font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17212b;background:#f4f5f8}
     *{box-sizing:border-box}body{margin:0}main{max-width:880px;margin:44px auto;padding:0 18px 48px}
@@ -22,18 +22,18 @@
 <body>
   <main>
     <div class="eyebrow">PI DURABLE / CLOUDFLARE</div>
-    <h1>免费 Serverless Agent 实验</h1>
-    <p>复用 Pi Durable 1.1.0 的持久化执行逻辑。使用 faux 模型，无付费 Token；聊天提交和定时提醒由 Cloudflare Durable Object 保存。</p>
+    <h1>Pi Durable Edge</h1>
+    <p>构建在 Cloudflare 上的持久化 Pi Agent。当前初始版本使用 faux 模型，无付费 Token；聊天任务和定时提醒由 Durable Objects 保存。</p>
     <section class="panel">
       <h2>访问令牌</h2>
-      <div class="controls"><input id="token" type="password" placeholder="部署时配置的 DEMO_TOKEN" autocomplete="off"><button id="connect" class="primary">连接</button></div>
-      <div id="feedback" aria-live="polite">首次使用请填写在 Cloudflare 侧设置的 DEMO_TOKEN。</div>
+      <div class="controls"><input id="token" type="password" placeholder="部署时配置的 ACCESS_TOKEN" autocomplete="off"><button id="connect" class="primary">连接</button></div>
+      <div id="feedback" aria-live="polite">首次使用请填写在 Cloudflare 侧设置的 ACCESS_TOKEN。</div>
     </section>
     <section class="panel">
       <h2>① 模拟对话 / 持久化任务</h2>
       <div class="notice">发送后立即返回操作 ID，后台进入 12 秒等待任务。可以刷新页面再查看历史。刷新网页只验证前端重连；验证真正的实例中断，需要在任务期间重新部署 Worker。</div>
       <div class="messages" id="messages" aria-live="polite"></div>
-      <div class="controls"><input id="prompt" maxlength="1000" placeholder="例如：执行一次断点恢复演示"><button id="send" class="primary">运行 Demo</button><button id="refresh">刷新状态</button></div>
+      <div class="controls"><input id="prompt" maxlength="1000" placeholder="例如：执行一次断点恢复演示"><button id="send" class="primary">运行任务</button><button id="refresh">刷新状态</button></div>
       <div id="pending" class="muted" style="padding-top:8px"></div>
     </section>
     <section class="panel">
@@ -41,7 +41,7 @@
       <div class="controls"><input id="reminder-text" maxlength="200" placeholder="到点后显示的提醒内容"><input id="seconds" type="number" min="5" max="3600" value="10" style="max-width:110px"><button id="remind" class="primary">创建提醒</button></div>
       <div id="reminders" style="margin-top:12px" class="muted">暂无提醒。</div>
     </section>
-    <footer>单用户实验版 · Faux 并非通用 AI 模型 · 提醒完成状态保存在 SQLite 中，当前不发送手机通知</footer>
+    <footer>单用户初始版本 · Faux 并非通用 AI 模型 · 提醒完成状态保存在 SQLite 中，当前不发送手机通知</footer>
   </main>
 </body>
 </html>
