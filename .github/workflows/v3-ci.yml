@@ -1,7 +1,7 @@
 name: v3 checks
 on:
   push:
-    branches: ["feat/v3-task-center"]
+    branches: [main, "feat/v3-task-center"]
   pull_request:
     branches: [main]
 jobs:
