@@ -202,3 +202,89 @@ SSE 要发心跳注释（每 15 秒 `: ping`），连接关闭时 `unsubscribe` 
 - `Dockerfile`：`node:22-slim`，`npm ci --omit=dev`，非 root 用户运行，`DATA_DIR=/data`，`EXPOSE 3000`。
 - `compose.yaml`：服务名 `pi-durable-demo`，`restart: unless-stopped`，`env_file: .env`，数据卷 `pi-durable-demo-data:/data`，`ports: ["127.0.0.1:${HOST_PORT:-3300}:3000"]`，`mem_limit: 1g`，`cpus: 1.0`，`read_only: true` 配 `tmpfs: /tmp`，`security_opt: ["no-new-privileges:true"]`，并加入外部网络 `${SUB2API_NETWORK}`（用来访问 sub2api 容器）以及自己的默认网络。
 - `.env.example`：列出所有变量，值留空或示例，**不放真实 Key**。
+
+---
+
+# v2（2026-10-10）
+
+目标：让 Demo 更有意思、更像一个“活的”个人 Agent，同时把 Pi Durable 的流程讲全。v1 的接口全部保留，下面是新增部分。
+
+## 新能力（后端，Claude 实现）
+
+1. **定时提醒（后台持久任务）**：工具 `remind_me({ minutes, text })`，0.25–1440 分钟。建一个后台 Task `app.reminder`，到点后以“follow-up 输入”投回会话（内容以 `[定时提醒]` 开头），Agent 会主动开口提醒用户。进程重启、浏览器关掉都不影响，这是“合上电脑它还在跑”的直接演示。
+2. **子 Agent**：工具 `delegate({ task })`，创建一个由这次工具调用拥有的子会话，派它独立完成一件事，等它答完把结果交回主 Agent。子会话可以在前端单独打开查看。
+3. **任务面板**：把 Harness 的任务图（每一步都是一个带检查点的持久任务）推给前端。
+
+## SSE `view` 新增字段
+
+```js
+{
+  // ……v1 字段不变
+  tasks: [   // 本会话及其子会话里还活着的任务；结束的任务会消失
+    { id, kind, status, phase, owner, background, conversations: [子会话ID] }
+    // kind 常见值：pi.generation（调模型）、pi.tool（执行工具）、pi.compaction、app.reminder（定时提醒）
+    // status：pending / running / waiting / completing
+  ],
+  reminders: [ // 本会话的提醒，按时间排序
+    { id, text, at /* 毫秒时间戳 */, status: "scheduled" | "fired" }
+  ],
+  subagents: [ // 本会话派出的子 Agent
+    { conversationId, task, status: "running" | "done" }
+  ],
+  parentId,    // 如果本会话是子 Agent 会话，这里是主会话 ID，否则 null
+}
+```
+
+`/api/conversations` 列表不包含子 Agent 会话；子会话通过 `#会话ID` 直接打开，SSE、发消息接口与普通会话相同。
+
+## 前端 v2（Gemini 实现，只改 `public/index.html`）
+
+### 吉祥物“小 D”
+
+右栏顶部放一个内联 SVG 小机器人（自己画，圆润可爱，不用外部图片），带一个对话气泡，根据状态切换表情和动作（CSS 动画即可）。状态判定优先级从高到低：
+
+| 状态 | 判定 | 表现 | 气泡文字示例 |
+|---|---|---|---|
+| 断线 | SSE 断开 | 眼睛变成 ×，头顶冒烟，轻微抖动 | 我挂了……等我一下 |
+| 刚恢复 | 重连后 `boots` 比之前大，持续 4 秒 | 跳起来，眼睛变成星星 | 我回来了！第 N 次启动，接着干 |
+| 等待中 | `live.tools` 里有 `wait_seconds` 在跑 | 打瞌睡，头顶 Zzz | 小睡一下，还剩 12 秒 |
+| 用工具 | `live.tools` 里有其他工具在跑 | 头顶灯闪，手里举工具 | 正在看网页……（按下表映射） |
+| 思考中 | `busy` 且没有工具在跑 | 眼睛转圈，头顶天线闪 | 思考中…… |
+| 有提醒 | 空闲且有 `scheduled` 提醒 | 抱着小闹钟 | 3 分 20 秒后提醒你喝水 |
+| 空闲 | 其他 | 慢慢眨眼、轻微上下浮动 | 有事叫我～ |
+
+工具名映射：`fetch_page` 看网页、`wait_seconds` 等待、`todo` 记待办、`memo` 记备忘、`remind_me` 定闹钟、`delegate` 派子 Agent、`current_time` 看时间。
+
+手机宽度下小 D 缩小放在顶栏右侧，只显示表情，点一下弹出气泡。
+
+### 新面板（右栏，小 D 下面依次排列）
+
+1. **记事本**（v1 已有，保留）。
+2. **定时提醒**：列出提醒，`scheduled` 的显示实时倒计时，`fired` 的显示“已提醒”并变灰。
+3. **任务面板**：标题“持久任务（每一步都有检查点）”，按 owner 关系缩进成树，每个任务一行：中文名（`pi.generation` 调用模型、`pi.tool` 执行工具、`app.reminder` 定时提醒、其他显示原名）＋状态小标签（pending 排队、running 运行中、waiting 等待中、completing 收尾）。没有任务时显示“空闲，没有正在运行的任务”。崩溃重启后这里的任务会从 running 变 pending 再变 running，正好能截图。
+4. **运行状态**（v1 已有，保留）。
+
+### 消息流
+
+- `delegate` 的工具卡片显示成“子 Agent”样式：任务内容＋状态，并带“查看子 Agent 对话 →”链接（`#子会话ID`）。
+- 以 `[定时提醒]` 开头的用户消息不显示成用户气泡，显示成居中的“⏰ 提醒”系统卡片。
+- 子 Agent 会话页面顶部显示一条提示：“这是子 Agent 的对话，← 返回主对话”。
+- 空会话显示 4 个示例按钮，点击填入输入框：
+  - “帮我看看 https://pi.dev 首页讲了什么，抓完等 20 秒再总结”（副标题：演示断点恢复，等待时点模拟崩溃）
+  - “2 分钟后提醒我站起来活动一下”（副标题：演示后台提醒，关掉网页也会提醒）
+  - “派一个子 Agent 去看看 https://earendil.com 有什么新文章，再告诉我”（副标题：演示子 Agent）
+  - “记住：我喜欢简洁、带要点的回答”（副标题：演示 Document 记忆）
+
+### 整体视觉
+
+现在太素。要有个性但干净：
+
+- 品牌名“Pi Durable 小助手”，配一个小 Logo。
+- 主色用一个有活力的颜色（比如靛蓝到紫的渐变用在按钮和重点处），背景加很淡的纹理或渐变，卡片圆角和柔和阴影。
+- 消息出现、待办勾选、任务状态变化加轻量过渡动画；尊重 `prefers-reduced-motion`。
+- 深色模式同样精致。
+- 仍然不引入任何外部 CSS、JS、字体、图片。
+
+### 验收
+
+后端 v2 完成前，用仓库外的 mock 服务器自测（按上面的字段造数据，覆盖小 D 的全部 7 种状态）。交付时说明每种状态怎么触发、截图看过没有。
