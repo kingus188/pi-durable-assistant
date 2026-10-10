@@ -323,7 +323,7 @@ async function route(req, res) {
 			const body = await readBody(req);
 			try {
 				const item = await conversation.commit((tx) =>
-					scheduleInTx(tx, conversation.id, body, typeof body.requestId === "string" ? body.requestId.slice(0, 100) : null), ctx);
+					scheduleInTx(tx, conversation.id, body, body.requestId ?? null), ctx);
 				return sendJson(res, 201, { item });
 			} catch (error) { if (/任务内容|首次执行|重复间隔|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
@@ -348,7 +348,7 @@ async function route(req, res) {
 			const body = await readBody(req);
 			try {
 				const item = await conversation.commit((tx) =>
-					backgroundInTx(tx, conversation.id, body, typeof body.requestId === "string" ? body.requestId.slice(0, 100) : null), ctx);
+					backgroundInTx(tx, conversation.id, body, body.requestId ?? null), ctx);
 				return sendJson(res, 201, { item });
 			} catch (error) { if (/后台任务说明|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
