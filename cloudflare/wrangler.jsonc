@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "pi-durable-cloudflare-demo",
+  "name": "pi-durable-edge",
   "main": "src/index.js",
   "compatibility_date": "2026-10-10",
   "compatibility_flags": ["nodejs_compat"],
