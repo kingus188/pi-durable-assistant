@@ -136,7 +136,7 @@ const Meta = defineDoc({
 4. `memo({ text })`：追加一条备忘到 `Notes`。
 5. `current_time({})`：返回 Asia/Shanghai 当前时间。
 
-工具执行函数签名：`execute: async (args, api, callContext) => ({ output: [{ type: "text", text }] })`。
+工具执行函数签名：`execute: async (args, api, callContext) => ({ content: [{ type: "text", text }] })`。注意 1.1.0 发布版用 `content`，README 里的 `output` 是更新版本的写法（已实测）；同理 1.1.0 没有 `harness.closed`，错误用 `onReport` 记录。
 
 系统提示用 `section("preamble", () => "...", { tag: false })`，内容大意：你是“小墨的 Durable 助手”，用简体中文简洁回答；遇到多步骤任务先用 `todo` 列出步骤，做完一步标记一步；用户要求等待、定时、隔一段时间再检查时用 `wait_seconds`；需要记住的信息用 `memo`。再加一个 `section("notes", ...)` 把当前记事本内容渲染给模型（参考 README 的 `11-extension-state` 写法：`input.read.snapshot(Notes, input.conversationId, renderContext)`，不存在时返回 `undefined`）。
 
