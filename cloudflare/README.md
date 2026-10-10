@@ -27,13 +27,13 @@
 cd cloudflare
 npm install
 cp .dev.vars.example .dev.vars
-# 把 DEMO_TOKEN 改成至少 24 字符（切勿提交到仓库）
+# 把 ACCESS_TOKEN 改成至少 24 字符（切勿提交到仓库）
 npm run check
 npm run dev
 # 浏览器打开 Wrangler 输出的本地地址
 ```
 
-如果要部署至自己的 Cloudflare 账户，也可以手动运行 `npm run deploy`，再通过 `npx wrangler secret put DEMO_TOKEN` 设置密钥。
+如果要部署至自己的 Cloudflare 账户，也可以手动运行 `npm run deploy`，再通过 `npx wrangler secret put ACCESS_TOKEN` 设置密钥。
 
 ## 验收方法
 
@@ -42,7 +42,7 @@ npm run dev
 3. **中断恢复**：在 12 秒任务进行期间重新部署 Worker、或强制中断本地 Wrangler Dev 再启动，检查最终答复只出现一次。复用原项目 `api.memo('deadline', ...)` 思路以保留原截止时间。**浏览器刷新只能验证前端重连，不能证明进程崩溃恢复。** 实际生产环境应额外验证重复副作用和升级兼容性。
 4. **定时唤醒**：创建 10 秒提醒，关闭网页，超过 10 秒后重新打开，核对 SQLite 中的 `fired` 状态。
 
-## API（必须发送 `Authorization: Bearer <DEMO_TOKEN>`）
+## API（必须发送 `Authorization: Bearer <ACCESS_TOKEN>`）
 
 - `GET /api/state`：对话、未完成任务、提醒状态。
 - `POST /api/chat`：`{ "text": "测试恢复", "operationId": "客户端唯一随机ID" }`；同 ID 重试幂等。
