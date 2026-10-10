@@ -452,6 +452,24 @@
     }
 
     /* 消息条目 */
+    .no-anim { animation: none !important; }
+    .assistant-bubble.md { white-space: normal; }
+    .md > :first-child { margin-top: 0; }
+    .md > :last-child { margin-bottom: 0; }
+    .md p { margin: 0 0 8px; }
+    .md h3, .md h4, .md h5, .md h6 { margin: 12px 0 6px; line-height: 1.4; }
+    .md h3 { font-size: 16px; } .md h4 { font-size: 15px; } .md h5, .md h6 { font-size: 14.5px; }
+    .md ul, .md ol { margin: 4px 0 8px; padding-left: 22px; }
+    .md li { margin: 2px 0; }
+    .md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--tool-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+    .md pre { margin: 8px 0; padding: 10px 12px; background: var(--tool-bg); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; white-space: pre; }
+    .md pre code { background: none; border: 0; padding: 0; font-size: 12.5px; }
+    .md blockquote { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--border); color: var(--text-muted); }
+    .md table { border-collapse: collapse; margin: 8px 0; display: block; overflow-x: auto; max-width: 100%; }
+    .md th, .md td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
+    .md th { background: var(--tool-bg); }
+    .md hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+    .md a { color: inherit; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
     .message-row {
       display: flex;
       width: 100%;
@@ -1994,6 +2012,125 @@
         .replace(/'/g, '&#39;');
     }
 
+    // ---- 增量渲染：只替换内容变了的子节点，没变的原样保留 ----
+    // 每次推送都整块重建会让淡入动画重放、滚动和展开状态丢失，看起来就是闪烁
+    function patchChildren(target, staging) {
+      const next = Array.from(staging.children);
+      const prev = Array.from(target.children);
+      next.forEach((node, i) => {
+        node.__sig = node.outerHTML;
+        const old = prev[i];
+        if (old && old.__sig === node.__sig) return;
+        // 同一位置的更新（比如工具结果到达、流式文字增长）不再播放入场动画
+        if (old) {
+          node.classList.add('no-anim');
+          target.replaceChild(node, old);
+        } else {
+          target.appendChild(node);
+        }
+      });
+      for (let i = next.length; i < prev.length; i++) prev[i].remove();
+    }
+
+    // 面板渲染函数先画到离屏节点，微任务里统一打补丁到页面
+    const pendingPatches = [];
+    function stagingFor(id) {
+      const real = document.getElementById(id);
+      if (!real) return null;
+      const staging = document.createElement(real.tagName);
+      if (pendingPatches.length === 0) queueMicrotask(flushPatches);
+      pendingPatches.push([real, staging]);
+      return staging;
+    }
+    function flushPatches() {
+      for (const [real, staging] of pendingPatches.splice(0)) patchChildren(real, staging);
+    }
+
+    // ---- 极简 Markdown 渲染：先整体转义，再加格式，不信任模型输出的任何 HTML ----
+    function renderInlineMarkdown(text) {
+      const codes = [];
+      let out = escapeHtml(text).replace(/`([^`\n]+)`/g, (_, c) => {
+        codes.push(c);
+        return '\u0000' + (codes.length - 1) + '\u0000';
+      });
+      out = out
+        .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        .replace(/(^|[\s(（])(https?:\/\/[^\s<)）]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*\s][^*\n]*?)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+      return out.replace(/\u0000(\d+)\u0000/g, (_, i) => '<code>' + codes[Number(i)] + '</code>');
+    }
+
+    function renderMarkdown(src) {
+      const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+      const html = [];
+      let para = [];
+      const flushPara = () => {
+        if (para.length) html.push('<p>' + para.map(renderInlineMarkdown).join('<br>') + '</p>');
+        para = [];
+      };
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const fence = line.match(/^\s*```(\S*)\s*$/);
+        if (fence) {
+          flushPara();
+          const body = [];
+          for (i++; i < lines.length && !/^\s*```\s*$/.test(lines[i]); i++) body.push(lines[i]);
+          html.push('<pre><code>' + escapeHtml(body.join('\n')) + '</code></pre>');
+          continue;
+        }
+        if (!line.trim()) { flushPara(); continue; }
+        const heading = line.match(/^(#{1,6})\s+(.*)$/);
+        if (heading) {
+          flushPara();
+          const level = Math.min(6, heading[1].length + 2);
+          html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+          continue;
+        }
+        if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { flushPara(); html.push('<hr>'); continue; }
+        // 表格：| a | b | 下一行是 |---|---|
+        if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
+          flushPara();
+          const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => renderInlineMarkdown(c.trim()));
+          const head = cells(line);
+          const rows = [];
+          for (i += 2; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) rows.push(cells(lines[i]));
+          i--;
+          html.push('<table><thead><tr>' + head.map((c) => `<th>${c}</th>`).join('') + '</tr></thead><tbody>' +
+            rows.map((r) => '<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody></table>');
+          continue;
+        }
+        const list = line.match(/^\s*([-*+]|\d+[.)])\s+(.*)$/);
+        if (list) {
+          flushPara();
+          const ordered = /\d/.test(list[1]);
+          const items = [];
+          for (; i < lines.length; i++) {
+            const m = lines[i].match(/^\s*([-*+]|\d+[.)])\s+(.*)$/);
+            if (!m || /\d/.test(m[1]) !== ordered) break;
+            items.push(m[2]);
+          }
+          i--;
+          const tag = ordered ? 'ol' : 'ul';
+          html.push(`<${tag}>` + items.map((t) => `<li>${renderInlineMarkdown(t)}</li>`).join('') + `</${tag}>`);
+          continue;
+        }
+        if (/^\s*>\s?/.test(line)) {
+          flushPara();
+          const quote = [];
+          for (; i < lines.length && /^\s*>\s?/.test(lines[i]); i++) quote.push(lines[i].replace(/^\s*>\s?/, ''));
+          i--;
+          html.push('<blockquote>' + quote.map(renderInlineMarkdown).join('<br>') + '</blockquote>');
+          continue;
+        }
+        para.push(line);
+      }
+      flushPara();
+      return html.join('');
+    }
+
     function generateUuid() {
       if (typeof crypto !== 'undefined' && crypto.randomUUID) {
         return crypto.randomUUID();
@@ -2212,7 +2349,7 @@
     }
 
     function renderConversationList() {
-      const listEl = document.getElementById('conversation-list');
+      const listEl = stagingFor('conversation-list');
       if (!listEl) return;
       listEl.innerHTML = '';
 
@@ -2474,10 +2611,12 @@
     // 渲染主函数
     // =========================================================
     function renderView(view) {
-      const container = document.getElementById('messages-container');
-      if (!container) return;
+      const chatEl = document.getElementById('messages-container');
+      if (!chatEl) return;
+      // 先画到离屏节点，最后只把变化补到页面上
+      const container = document.createElement('div');
 
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+      const isNearBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 80;
 
       // 1. 处理子 Agent 会话顶部提示
       const parentBanner = document.getElementById('subagent-parent-banner');
@@ -2490,8 +2629,6 @@
           parentBanner.style.display = 'none';
         }
       }
-
-      container.innerHTML = '';
 
       // 2. 空会话：显示 4 个示例引导按钮
       const hasRenderableEntries = Array.isArray(view.entries) && view.entries.some(e => {
@@ -2607,7 +2744,7 @@
 
               let assistantHtml = '<div class="assistant-wrapper">';
               if (hasText) {
-                assistantHtml += `<div class="assistant-bubble">${escapeHtml(entry.text)}</div>`;
+                assistantHtml += `<div class="assistant-bubble md">${renderMarkdown(entry.text)}</div>`;
               }
 
               // 附带的工具调用卡片（含 delegate 子 Agent）
@@ -2667,9 +2804,7 @@
 
           if (hasLiveText) {
             liveInner += `
-              <div class="assistant-bubble">
-                ${escapeHtml(liveInfo.text)}<span class="cursor-blink"></span>
-              </div>
+              <div class="assistant-bubble md">${renderMarkdown(liveInfo.text)}<span class="cursor-blink"></span></div>
             `;
           } else if (showThinkingBubble) {
             if (hasThinkingText) {
@@ -2713,9 +2848,11 @@
       // 7. 更新吉祥物小 D 状态
       updateMascotState();
 
+      patchChildren(chatEl, container);
+
       // 自动滚到底部
       if (isNearBottom || autoScrollChat) {
-        container.scrollTop = container.scrollHeight;
+        chatEl.scrollTop = chatEl.scrollHeight;
       }
     }
 
@@ -2901,8 +3038,8 @@
 
     // 渲染记事本
     function renderNotes(notes) {
-      const todoListEl = document.getElementById('todo-list');
-      const memoListEl = document.getElementById('memo-list');
+      const todoListEl = stagingFor('todo-list');
+      const memoListEl = stagingFor('memo-list');
 
       if (todoListEl) {
         todoListEl.innerHTML = '';
@@ -2938,7 +3075,7 @@
 
     // 渲染定时提醒面板
     function renderReminders(reminders) {
-      const listEl = document.getElementById('reminder-list');
+      const listEl = stagingFor('reminder-list');
       if (!listEl) return;
       listEl.innerHTML = '';
 
@@ -2989,7 +3126,7 @@
     };
 
     function renderTasks(tasks) {
-      const treeEl = document.getElementById('task-tree');
+      const treeEl = stagingFor('task-tree');
       if (!treeEl) return;
       treeEl.innerHTML = '';
 
