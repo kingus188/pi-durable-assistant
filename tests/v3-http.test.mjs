@@ -88,3 +88,43 @@ test("创建、管理、持久化和导出接口（无需 API Key）", { timeout
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("计划触发与后台子 Agent 在进程重启后继续完成", { timeout: 50000 }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-v3-recovery-"));
+  let app;
+  try {
+    app = await launch(dir, await freePort());
+    const { id } = await post(app.origin, "/api/conversations");
+    const prefix = "/api/conversations/" + id;
+    const scheduled = await post(app.origin, prefix + "/schedules", {
+      text: "完成一次检查", minutesFromNow: 0.25, requestId: "schedule-recovery",
+    });
+    const background = await post(app.origin, prefix + "/background", {
+      text: "执行一个十秒的演示任务并报告", requestId: "background-recovery",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await stop(app.child);
+    app = await launch(dir, await freePort());
+    let latest;
+    for (let i = 0; i < 145; i++) {
+      latest = await (await fetch(app.origin + prefix + "/management")).json();
+      const job = latest.background.find((x) => x.id === background.item.id);
+      const schedule = latest.schedules.find((x) => x.id === scheduled.item.id);
+      if (job?.status === "done" && schedule?.status === "completed") break;
+      if (job?.status === "failed") throw new Error("后台任务失败：" + job.result);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    const job = latest.background.find((x) => x.id === background.item.id);
+    const schedule = latest.schedules.find((x) => x.id === scheduled.item.id);
+    assert.equal(job.status, "done", "后台 Agent 未完成：" + JSON.stringify(job));
+    assert.ok(job.conversationId, "未记录子会话");
+    assert.equal(schedule.status, "completed", "计划未触发：" + JSON.stringify(schedule));
+    assert.equal(schedule.runs, 1, "任务必须恰好触发一次");
+  } catch (error) {
+    console.error("崩溃恢复测试服务输出：", app?.getLogs?.());
+    throw error;
+  } finally {
+    if (app) await stop(app.child);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
