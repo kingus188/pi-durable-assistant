@@ -1,6 +1,6 @@
 # v4 知识库驱动的个人 Agent：候选功能需求
 
-> 状态：需求草案，**尚未实现**。基于 2026-10-10 对私有 Obsidian `xiaomoBoy/Obsidian` 的目录与重点文件抽查形成。这里定义的是 **Pi Durable 产品功能**，而不是要求增加五类 Obsidian 笔记。实施须沿用现有单用户、SQLite、原生 ESM 和 Durable Runtime；微信只是可选的输入/输出 Channel。
+> 状态：FR-01 的只读检索、以及 FR-02 的候选记忆（批准前不生效）已在本机实现。写回 Obsidian、证据卡、X 写作和反馈关联仍未做。基于 2026-10-10 对私有 Obsidian `xiaomoBoy/Obsidian` 的目录与重点文件抽查形成。这里定义的是 **Pi Durable 产品功能**，而不是要求增加五类 Obsidian 笔记。实施须沿用现有单用户、SQLite、原生 ESM 和 Durable Runtime；微信只是可选的输入/输出 Channel。
 
 ## 产品目标与边界
 

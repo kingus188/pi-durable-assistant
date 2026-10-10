@@ -22,6 +22,8 @@
 | `WECHAT_WEBHOOK_KEY` | 空 | 微信桥到 Node 的入站 Bearer token |
 | `WECHAT_SEND_TOKEN` | 空 | Node 到微信桥本地发送接口的令牌，必须与入站令牌不同 |
 | `WECHAT_SEND_URL` | `http://127.0.0.1:18790/v1/send` | 共用网络命名空间内的微信发送地址，通常不要更改 |
+| `OBSIDIAN_ROOT` | 空 | 只读 Obsidian 仓库根目录。留空时知识库工具会说明未启用，不影响聊天 |
+| `OBSIDIAN_ALLOW` | 空 | 额外允许的相对路径，用英文逗号分隔。默认已包含 AI学习、X灵感、VPS小白教程 |
 
 另外，`PORT`（本地默认 `3000`）和 `DATA_DIR`（本地默认 `./data`、Docker 默认 `/data`）在代码中读取，可用于开发或容器环境；它们不是当前示例 `.env.example` 的主要部署配置。
 
@@ -63,7 +65,9 @@ ENABLE_CRASH_DEMO=0
 
 **微信：**默认不开启。启用前分别用 `openssl rand -hex 32` 生成 `WECHAT_WEBHOOK_KEY` 与 `WECHAT_SEND_TOKEN`，将 `WECHAT_ENABLED=1` 放入 `.env`，按 [微信接入手册](WECHAT.md) 使用 `--profile wechat` 启动。微信扫码凭据保存在专用 Docker 命名卷，不应导出到仓库。
 
-**工作区审批与 Obsidian：**这两项在待验收的 [PR #5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5)、[PR #4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4) 中，当前 `main` 的 `.env.example` **没有**它们的配置。请勿按待合并分支的参数尝试启用主分支。
+**笔记检索：**设置 `OBSIDIAN_ROOT` 后，助手只能只读检索白名单笔记，回答带来源路径和行号，不会写回 Obsidian。默认只开放 AI学习、X灵感、VPS小白教程；财务、个人档案和服务器资产不在范围内。这与未合并的 [PR #4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4) 不是同一份代码。
+
+**工作区审批：**仍在待验收的 [PR #5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5) 中。当前 `main` 没有对应配置，请勿按待合并分支的参数尝试启用。
 
 ## 安全建议
 

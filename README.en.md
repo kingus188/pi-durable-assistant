@@ -26,6 +26,10 @@ Unlike a disposable chatbot session, this project wraps the Pi Durable runtime i
 | WeChat | Optional iLink bridge for text and voice-transcription text, with its own outbox |
 | Notifications | Optional generic Webhook or Feishu text bot; **best-effort on main** |
 | Export | Visible user/assistant messages to Markdown |
+| Long-term memory | `propose_memory` stays pending until approved in the task center. Text you enter there applies immediately. Stored only in local SQLite |
+| Skills | Approved skills expose only a name and trigger in the prompt. The model reads the full text with `read_skill` |
+| Notes search | Optional read-only search of an allowlisted Obsidian vault, with path and line citations. Nothing is written back |
+| Conversation list | Archive or remove a chat from the menu. Archive also stops that chat's unfinished reminders, schedules and background jobs. Removal drops the menu row only |
 
 **Tech stack:** Node.js 22+, native ESM JavaScript, Pi Durable 1.1.0, SQLite, Docker Compose. No front-end build pipeline or external database server required.
 
@@ -75,12 +79,12 @@ See [deployment and backup guidance](docs/DEPLOYMENT.md), [troubleshooting](docs
 - Fixed-minute recurring jobs are **not timezone-aware cron expressions**.
 - Browser uploads support up to 5 files: 5 MiB per image, 200 KiB per text file, 10 MiB total. WeChat media is **not actually parsed**; only text or transcribed voice text is supported there.
 - Generic Webhook / Feishu delivery in `main` is best-effort; it has no persistent retry queue. WeChat has a separate delivery queue.
-- The following features are **open PRs, not released on main**: Obsidian read-only retrieval ([#4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4)), workspace approval ([#5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5)), and generic durable Outbox ([#6](https://github.com/xiaomoBoy/pi-durable-assistant/pull/6)).
+- The following features are **open PRs, not released on main**: workspace approval ([#5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5)) and generic durable Outbox ([#6](https://github.com/xiaomoBoy/pi-durable-assistant/pull/6)). Read-only note search is on `main` and does not depend on the unmerged [#4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4).
 - Simulated CI tests do not validate real LLM accounts, WeChat login, mobile browsers or production disaster recovery.
 
 ## Project layout and tests
 
-`server.mjs` exposes HTTP and SSE; `lib/agent.mjs` wires the Durable Harness; `lib/v3.mjs` handles scheduled/background work; `lib/attachments.mjs` parses browser uploads; `lib/wechat.mjs` handles the WeChat bridge. The front end lives in `public/index.html`, `public/app.js`, `public/style.css`, and `public/v3.js`.
+`server.mjs` exposes HTTP and SSE; `lib/agent.mjs` wires the Durable Harness; `lib/v3.mjs` handles scheduled/background work; `lib/personal.mjs` holds cross-session memory and skills; `lib/knowledge.mjs` searches an allowlisted Obsidian vault; `lib/attachments.mjs` parses browser uploads; `lib/wechat.mjs` handles the WeChat bridge. The front end lives in `public/index.html`, `public/app.js`, `public/style.css`, and `public/v3.js`.
 
 ```bash
 npm ci

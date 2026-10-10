@@ -1,7 +1,7 @@
 // 管理页面独立加载，不依赖既有前端的内部状态。
 (() => {
   const sheet = document.createElement("style");
-  sheet.textContent = "/* v3 管理侧栏：独立于旧版单文件前端，移动端也可操作。 */\n#v3-toggle{position:fixed;right:22px;bottom:22px;z-index:2500;background:#4338ca;color:white;border:0;border-radius:999px;padding:12px 18px;box-shadow:0 6px 24px #1113;cursor:pointer}\n#v3-drawer{position:fixed;z-index:2501;right:16px;bottom:72px;top:16px;width:min(420px,calc(100vw - 32px));background:var(--bg-surface,#fff);color:var(--text-main,#111);border:1px solid var(--border,#ddd);box-shadow:0 18px 48px #0003;border-radius:16px;padding:18px;overflow:auto;font-size:14px}\n#v3-drawer[hidden]{display:none}\n#v3-drawer h2{font-size:18px;margin:0}\n#v3-drawer h3{font-size:14px;margin:18px 0 10px}\n#v3-drawer .v3-head{display:flex;align-items:center;justify-content:space-between}\n#v3-drawer form{display:grid;gap:8px}\n#v3-drawer label{display:grid;gap:4px;color:var(--text-muted,#666)}\n#v3-drawer input,#v3-drawer textarea{background:var(--bg-input,#fff);color:var(--text-main,#111);border:1px solid var(--border,#ddd);border-radius:8px;padding:9px;width:100%}\n#v3-drawer textarea{min-height:72px;resize:vertical}\n#v3-drawer button{border:1px solid var(--border,#ddd);background:var(--bg-subtle,#f6f6f6);color:var(--text-main,#111);border-radius:8px;padding:7px 10px;cursor:pointer}\n#v3-drawer button.v3-primary{background:#4338ca;color:#fff;border:0}\n#v3-drawer button:disabled{opacity:.5;cursor:default}\n#v3-drawer .v3-row{padding:9px 0;border-bottom:1px solid var(--border,#ddd)}\n#v3-drawer .v3-row p{margin:5px 0;overflow-wrap:anywhere}\n#v3-drawer .v3-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}\n#v3-drawer .v3-muted{font-size:12px;color:var(--text-muted,#666)}\n#v3-drawer .v3-status{font-size:12px;color:var(--primary,#4338ca)}\n#v3-drawer .v3-duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}\n#v3-feedback{min-height:20px;color:var(--text-muted,#666)}\n@media(max-width:600px){#v3-drawer{top:8px;right:8px;bottom:8px;width:calc(100vw - 16px)}#v3-toggle{bottom:14px;right:14px}}";
+  sheet.textContent = "/* v3 管理侧栏：独立于旧版单文件前端，移动端也可操作。 */\n#v3-toggle{position:fixed;right:22px;bottom:100px;z-index:2500;background:#4338ca;color:white;border:0;border-radius:999px;padding:12px 18px;box-shadow:0 6px 24px #1113;cursor:pointer}\n#v3-drawer{position:fixed;z-index:2501;right:16px;bottom:72px;top:16px;width:min(420px,calc(100vw - 32px));background:var(--bg-surface,#fff);color:var(--text-main,#111);border:1px solid var(--border,#ddd);box-shadow:0 18px 48px #0003;border-radius:16px;padding:18px;overflow:auto;font-size:14px}\n#v3-drawer[hidden]{display:none}\n#v3-drawer h2{font-size:18px;margin:0}\n#v3-drawer h3{font-size:14px;margin:18px 0 10px}\n#v3-drawer .v3-head{display:flex;align-items:center;justify-content:space-between}\n#v3-drawer form{display:grid;gap:8px;box-sizing:border-box} #v3-drawer * { box-sizing: border-box; }\n#v3-drawer label{display:grid;gap:4px;color:var(--text-muted,#666)}\n#v3-drawer input,#v3-drawer textarea{background:var(--bg-input,#fff);color:var(--text-main,#111);border:1px solid var(--border,#ddd);border-radius:8px;padding:9px;width:100%}\n#v3-drawer textarea{min-height:72px;resize:vertical}\n#v3-drawer button{border:1px solid var(--border,#ddd);background:var(--bg-subtle,#f6f6f6);color:var(--text-main,#111);border-radius:8px;padding:7px 10px;cursor:pointer}\n#v3-drawer button.v3-primary{background:#4338ca;color:#fff;border:0}\n#v3-drawer button:disabled{opacity:.5;cursor:default}\n#v3-drawer .v3-row{padding:9px 0;border-bottom:1px solid var(--border,#ddd)}\n#v3-drawer .v3-row p{margin:5px 0;overflow-wrap:anywhere}\n#v3-drawer .v3-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}\n#v3-drawer .v3-muted{font-size:12px;color:var(--text-muted,#666)}\n#v3-drawer .v3-status{font-size:12px;color:var(--primary,#4338ca)}\n#v3-drawer .v3-duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}\n#v3-drawer pre{max-height:200px;overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg-subtle,#f6f6f6);border-radius:8px;padding:8px;margin:6px 0}\n#v3-feedback{min-height:20px;color:var(--text-muted,#666);position:sticky;top:0;background:var(--bg-surface,#fff);padding:4px 0;z-index:2;font-weight:bold}\n@media(max-width:600px){#v3-drawer{top:8px;right:8px;bottom:90px;width:calc(100vw - 16px)}#v3-toggle{top:64px;bottom:auto;right:14px;box-shadow:0 4px 14px rgba(0,0,0,0.28)}#v3-drawer .v3-duo{grid-template-columns:1fr}}";
   document.head.appendChild(sheet);
   const toggle = document.createElement("button");
   toggle.id = "v3-toggle";
@@ -28,6 +28,19 @@
     '<h3>计划任务</h3><div id="v3-schedules"></div>',
     '<h3>提醒</h3><div id="v3-reminders"></div>',
     '<h3>后台子 Agent</h3><div id="v3-background"></div>',
+    '<p class="v3-muted" id="v3-knowledge"></p>',
+    '<form id="v3-memory-form"><h3>长期记忆</h3>',
+    '<p class="v3-muted">跨会话生效。你在这里写下的会直接记住；助手提交的要先批准。</p>',
+    '<label>要记住的事实<input name="text" maxlength="280" required placeholder="例如：回复用简体中文"></label>',
+    '<button class="v3-primary" type="submit">记住</button></form>',
+    '<div id="v3-memory"></div>',
+    '<form id="v3-skill-form"><h3>技能</h3>',
+    '<p class="v3-muted">提示里只放名称。助手要用时才读取全文。</p>',
+    '<label>名称<input name="name" maxlength="40" required></label>',
+    '<label>什么时候用<input name="description" maxlength="180" required></label>',
+    '<label>步骤<textarea name="body" maxlength="4000" required></textarea></label>',
+    '<button class="v3-primary" type="submit">保存技能</button></form>',
+    '<div id="v3-skills"></div>',
     '<p class="v3-muted">执行采用持久化检查点；周期按固定分钟间隔重复。修改与暂停不会自动清理旧的睡眠任务，但会阻止其过期触发。</p>',
   ].join("");
   document.body.append(toggle, panel);
@@ -39,7 +52,10 @@
     return /^\d+$/.test(id) ? id : null;
   };
   const base = () => "/api/conversations/" + currentId();
-  const say = (msg) => { $("v3-feedback").textContent = msg; };
+  const say = (msg) => {
+    $("v3-feedback").textContent = msg;
+    if (window.showToast && msg.startsWith("操作")) window.showToast(msg, msg.includes("失败") ? "warning" : "info");
+  };
   const fmt = (time) => time == null ? "—" : new Date(time).toLocaleString();
   const el = (tag, text, cls) => {
     const node = document.createElement(tag);
@@ -67,18 +83,62 @@
     try { say("正在处理…"); await action(); say("操作完成"); await refresh(); }
     catch (e) { say("操作失败：" + e.message); }
   }
-  async function refresh() {
-    const sequence = ++latestRefresh;
-    const id = currentId();
-    $("v3-context").textContent = id ? "当前会话 #" + id : "请先在左侧选择一个会话";
-    $("v3-schedule-form").querySelector("button[type=submit]").disabled = !id;
-    $("v3-background-form").querySelector("button[type=submit]").disabled = !id;
-    $("v3-export").disabled = !id;
-    if (!id || panel.hidden) return;
+  const statusText = { approved: "已生效", pending: "待批准", rejected: "已撤回" };
+  function fillEmpty(node, text) {
+    if (!node.childElementCount) node.append(el("p", text, "v3-muted"));
+  }
+  function renderDecisionList(node, items, kind, emptyText) {
+    const opened = new Set([...node.querySelectorAll("details[open]")].map((node) => node.dataset.id));
+    const dataStr = JSON.stringify(items);
+    if (node._lastData === dataStr) return;
+    node._lastData = dataStr;
+    node.replaceChildren();
+    for (const item of items.filter((entry) => entry.status !== "rejected")) {
+      const row = el("div", "", "v3-row");
+      row.append(el("p", kind === "memory" ? item.text : item.name + "：" + item.description));
+      row.append(el("span", (statusText[item.status] || item.status) + " · " + (item.source === "user" ? "你写下的" : "助手提交"), "v3-muted"));
+      if (kind === "skills") {
+        const details = document.createElement("details");
+        details.dataset.id = String(item.id);
+        details.open = opened.has(String(item.id));
+        const summary = document.createElement("summary");
+        summary.textContent = "查看步骤";
+        const body = document.createElement("pre");
+        body.textContent = item.body;
+        details.append(summary, body);
+        row.append(details);
+      }
+      const actions = el("div", "", "v3-actions");
+      if (item.status === "pending") addButton(actions, "批准", () => run(() => request("/api/personal/" + kind + "/" + item.id + "/approve", {})));
+      if (item.status === "pending" || item.status === "approved") {
+        addButton(actions, item.status === "approved" ? "撤回" : "驳回", () => run(() => request("/api/personal/" + kind + "/" + item.id + "/reject", {})));
+      }
+      row.append(actions);
+      node.append(row);
+    }
+    fillEmpty(node, emptyText);
+  }
+  async function loadManagement(sequence, id) {
+    const schedules = $("v3-schedules");
+    const reminders = $("v3-reminders");
+    const background = $("v3-background");
+    const owner = String(id || "");
+    if (schedules._owner !== owner) {
+      schedules._owner = reminders._owner = background._owner = owner;
+      schedules._lastData = reminders._lastData = background._lastData = "";
+    }
+    if (!id) {
+      schedules.replaceChildren(el("p", "选择会话后才能管理计划任务", "v3-muted"));
+      reminders.replaceChildren();
+      background.replaceChildren();
+      return;
+    }
     try {
       const data = await request("/api/conversations/" + id + "/management");
       if (sequence !== latestRefresh || currentId() !== id || panel.hidden) return;
-      const schedules = $("v3-schedules"); schedules.replaceChildren();
+      const schedules = $("v3-schedules"); 
+   const schedStr = JSON.stringify(data.schedules || []);
+   if (schedules._lastData !== schedStr) { schedules._lastData = schedStr; schedules.replaceChildren(); 
       for (const item of data.schedules || []) {
         const row = el("div", "", "v3-row");
         row.append(el("p", item.text), el("span", item.status + " · 已执行 " + item.runs + " 次 · 下次 " + fmt(item.nextAt), "v3-muted"));
@@ -88,18 +148,22 @@
         if (item.status === "active" || item.status === "paused") addButton(actions, "取消", () => run(() => request(base() + "/schedules/" + item.id + "/cancel", {})));
         row.append(actions); schedules.append(row);
       }
-      if (!schedules.childElementCount) schedules.append(el("p", "暂无计划任务", "v3-muted"));
+      if (!schedules.childElementCount) schedules.append(el("p", "暂无计划任务", "v3-muted")); }
 
-      const reminders = $("v3-reminders"); reminders.replaceChildren();
+      const reminders = $("v3-reminders"); 
+   const remStr = JSON.stringify(data.reminders || []);
+   if (reminders._lastData !== remStr) { reminders._lastData = remStr; reminders.replaceChildren(); 
       for (const item of data.reminders || []) {
         const row = el("div", "", "v3-row");
         row.append(el("p", item.text), el("span", item.status + " · " + fmt(item.at), "v3-muted"));
         if (item.status === "scheduled") addButton(row, "取消提醒", () => run(() => request(base() + "/reminders/" + item.id + "/cancel", {})));
         reminders.append(row);
       }
-      if (!reminders.childElementCount) reminders.append(el("p", "暂无提醒", "v3-muted"));
+      if (!reminders.childElementCount) reminders.append(el("p", "暂无提醒", "v3-muted")); }
 
-      const background = $("v3-background"); background.replaceChildren();
+      const background = $("v3-background"); 
+   const bgStr = JSON.stringify(data.background || []);
+   if (background._lastData !== bgStr) { background._lastData = bgStr; background.replaceChildren(); 
       for (const item of data.background || []) {
         const row = el("div", "", "v3-row");
         row.append(el("p", item.text), el("span", item.status, "v3-status"));
@@ -109,8 +173,34 @@
         if (item.status === "running") addButton(actions, "停止", () => run(() => request(base() + "/background/" + item.id + "/stop", {})));
         row.append(actions); background.append(row);
       }
-      if (!background.childElementCount) background.append(el("p", "暂无后台任务", "v3-muted"));
-    } catch (e) { if (sequence === latestRefresh && currentId() === id && !panel.hidden) say("读取任务失败：" + e.message); }
+      if (!background.childElementCount) background.append(el("p", "暂无后台任务", "v3-muted")); }
+    } catch (e) {
+      if (sequence === latestRefresh && currentId() === id && !panel.hidden) say("读取任务失败：" + e.message);
+    }
+  }
+  async function loadPersonal(sequence) {
+    try {
+      const data = await request("/api/personal");
+      if (sequence !== latestRefresh || panel.hidden) return;
+      const knowledge = data.knowledge || {};
+      $("v3-knowledge").textContent = knowledge.enabled
+        ? "知识库只读：" + (knowledge.allow || []).join("、")
+        : "知识库未启用：" + (knowledge.reason || "未配置");
+      renderDecisionList($("v3-memory"), data.memory || [], "memory", "还没有跨会话记忆");
+      renderDecisionList($("v3-skills"), data.skills || [], "skills", "还没有技能");
+    } catch (e) {
+      if (sequence === latestRefresh && !panel.hidden) say("读取记忆和技能失败：" + e.message);
+    }
+  }
+  async function refresh() {
+    const sequence = ++latestRefresh;
+    const id = currentId();
+    $("v3-context").textContent = id ? "当前会话 #" + id : "记忆和技能不依赖当前会话；计划任务需要先选择会话";
+    $("v3-schedule-form").querySelector("button[type=submit]").disabled = !id;
+    $("v3-background-form").querySelector("button[type=submit]").disabled = !id;
+    $("v3-export").disabled = !id;
+    if (panel.hidden) return;
+    await Promise.all([loadManagement(sequence, id), loadPersonal(sequence)]);
   }
   function open(state) {
     panel.hidden = !state;
@@ -126,15 +216,35 @@
     const data = Object.fromEntries(new FormData(form));
     run(() => request(base() + "/schedules", {
       ...data, minutesFromNow: Number(data.minutesFromNow),
-      everyMinutes: Number(data.everyMinutes), requestId: crypto.randomUUID(),
+      everyMinutes: Number(data.everyMinutes), requestId: (typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():"req-"+Date.now()+"-"+Math.random().toString(36).slice(2,10)),
     }));
   });
   $("v3-background-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const form = e.currentTarget;
-    run(() => request(base() + "/background", {
-      text: new FormData(form).get("text"), requestId: crypto.randomUUID(),
-    }));
+    run(async () => {
+      await request(base() + "/background", {
+        text: new FormData(form).get("text"), requestId: (typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():"req-"+Date.now()+"-"+Math.random().toString(36).slice(2,10)),
+      });
+      form.reset();
+    });
+  });
+  $("v3-memory-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    run(async () => {
+      await request("/api/personal/memory", { text: new FormData(form).get("text"), requestId: (typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():"req-"+Date.now()+"-"+Math.random().toString(36).slice(2,10)) });
+      form.reset();
+    });
+  });
+  $("v3-skill-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    run(async () => {
+      await request("/api/personal/skills", { ...data, requestId: (typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():"req-"+Date.now()+"-"+Math.random().toString(36).slice(2,10)) });
+      form.reset();
+    });
   });
   $("v3-export").addEventListener("click", () => {
     if (!currentId()) return;

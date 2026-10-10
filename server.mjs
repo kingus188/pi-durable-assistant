@@ -5,7 +5,12 @@ import { timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT as ctx } from "@earendil-works/chord/context";
 import { config, Delegations, Index, Meta, Notes, openAgent, Reminders } from "./lib/agent.mjs";
 import { Schedules, BackgroundJobs, Parents, scheduleInTx, manageScheduleInTx, backgroundInTx } from "./lib/v3.mjs";
-import { WechatChannel } from "./lib/wechat.mjs";
+import {
+	MemoryDoc, SkillsDoc, decideMemoryInTx, decideSkillInTx, knowledgeStatus, personalError,
+	proposeMemoryInTx, proposeSkillInTx, publicMemory, publicSkills,
+} from "./lib/personal.mjs";
+import { readKnowledge, searchKnowledge } from "./lib/knowledge.mjs";
+import { WechatChannel, WechatState } from "./lib/wechat.mjs";
 import { AttachmentError, buildUserContent, imageAt, parseAttachments, splitUserContent } from "./lib/attachments.mjs";
 
 const { harness, root, agentModel, modelLabel } = await openAgent(ctx);
@@ -115,6 +120,68 @@ async function updateTitle(id, title) {
 	await root.commit(async (tx) => {
 		const item = (await tx.doc(Index)).items.find((i) => i.id === id);
 		if (item && item.title === "新对话") item.title = title;
+	}, ctx);
+}
+
+const sameConversation = (a, b) => Number(a) === Number(b);
+
+// 归档或移出列表前，先停掉这个会话还没做完的提醒、计划和后台任务。
+// 列表改动放在这之后：停失败时，会话仍留在当前列表里。
+async function quietConversation(id) {
+	const conversation = await getConversation(id);
+	const taskIds = await conversation.commit(async (tx) => {
+		const ids = [];
+		for (const item of (await tx.doc(Schedules, conversation.id)).items) {
+			if (item.status !== "active" && item.status !== "paused") continue;
+			item.status = "cancelled";
+			item.revision = (item.revision ?? 0) + 1;
+			if (item.jobId != null) ids.push(item.jobId);
+		}
+		for (const item of (await tx.doc(Reminders, conversation.id)).items) {
+			if (item.status !== "scheduled") continue;
+			item.status = "cancelled";
+			if (item.id != null) ids.push(item.id);
+		}
+		for (const item of (await tx.doc(BackgroundJobs, conversation.id)).items) {
+			if (item.status !== "running" || item.taskId == null) continue;
+			item.status = "cancelled";
+			ids.push(item.taskId);
+		}
+		return ids;
+	}, ctx);
+	for (const taskId of taskIds) {
+		try {
+			await harness.abortTask(taskId, ctx);
+		} catch (error) {
+			console.error("停止会话任务失败：", redact(error?.message || error));
+		}
+	}
+}
+
+async function shelveConversation(id, action) {
+	const index = await harness.snapshot(Index, ctx);
+	if (!(index?.items ?? []).some((item) => sameConversation(item.id, id))) {
+		throw new HttpError(400, "会话不在列表里");
+	}
+	const wechatState = await harness.snapshot(WechatState, ctx);
+	const bound = Object.values(wechatState?.bindings ?? {}).some((binding) => sameConversation(binding?.conversationId, id));
+	if (bound) throw new HttpError(400, "这是微信通道正在使用的会话，不能归档或删除。");
+	if (action !== "restore") await quietConversation(id);
+	return root.commit(async (tx) => {
+		const items = (await tx.doc(Index)).items;
+		const at = items.findIndex((item) => sameConversation(item.id, id));
+		if (at < 0) throw new HttpError(400, "会话不在列表里");
+		if (action === "remove") {
+			const [removed] = items.splice(at, 1);
+			return { id: removed.id, removed: true };
+		}
+		const item = items[at];
+		if (action === "archive") {
+			if (!item.archivedAt) item.archivedAt = new Date().toISOString();
+		} else {
+			item.archivedAt = null;
+		}
+		return { id: item.id, archivedAt: item.archivedAt ?? null };
 	}, ctx);
 }
 
@@ -271,6 +338,48 @@ async function route(req, res) {
 	if (method === "GET" && path === "/api/wechat/status") {
     return sendJson(res, 200, wechat ? await wechat.status() : { enabled: false });
   }
+	if (method === "GET" && path === "/api/personal") {
+		const [memory, skills] = await Promise.all([
+			harness.snapshot(MemoryDoc, ctx),
+			harness.snapshot(SkillsDoc, ctx),
+		]);
+		return sendJson(res, 200, { memory: publicMemory(memory), skills: publicSkills(skills), knowledge: knowledgeStatus() });
+	}
+	if (path === "/api/knowledge/search" && method === "GET") {
+		try {
+			const found = await searchKnowledge(url.searchParams.get("q") || "", { includeHistorical: url.searchParams.get("history") === "1" });
+			return sendJson(res, 200, found);
+		} catch (error) {
+			if (personalError(error)) throw new HttpError(400, error.message);
+			throw error;
+		}
+	}
+	if (path === "/api/knowledge/read" && method === "GET") {
+		try {
+			return sendJson(res, 200, await readKnowledge(url.searchParams.get("path") || "", Number(url.searchParams.get("line") || 1)));
+		} catch (error) {
+			if (personalError(error)) throw new HttpError(400, error.message);
+			throw error;
+		}
+	}
+	const personal = path.match(/^\/api\/personal\/(memory|skills)(?:\/([0-9a-f-]+)\/(approve|reject))?$/);
+	if (personal && method === "POST") {
+		const [, kind, itemId, action] = personal;
+		const body = itemId ? null : await readBody(req);
+		try {
+			const item = await root.commit(async (tx) => {
+				if (!itemId) {
+					const input = { ...body, requestId: body.requestId ?? null, source: "user", approved: true, conversationId: null };
+					return kind === "memory" ? proposeMemoryInTx(tx, input) : proposeSkillInTx(tx, input);
+				}
+				return kind === "memory" ? decideMemoryInTx(tx, itemId, action) : decideSkillInTx(tx, itemId, action);
+			}, ctx);
+			return sendJson(res, itemId ? 200 : 201, { item });
+		} catch (error) {
+			if (personalError(error)) throw new HttpError(400, error.message);
+			throw error;
+		}
+	}
   if (method === "GET" && path === "/api/info") {
 		const meta = await harness.snapshot(Meta, ctx);
 		return sendJson(res, 200, { model: modelLabel, api: config.api, pid: process.pid, startedAt, boots: meta?.boots ?? 0 });
@@ -287,6 +396,10 @@ async function route(req, res) {
 			);
 			return sendJson(res, 201, { id: conversation.id });
 		}
+	}
+	const shelf = method === "POST" && path.match(/^\/api\/conversations\/(\d+)\/(archive|restore|remove)$/);
+	if (shelf) {
+		return sendJson(res, 200, await shelveConversation(Number(shelf[1]), shelf[2]));
 	}
 	if (method === "POST" && path === "/api/crash") {
 		if (process.env.NODE_ENV === "production" && process.env.ENABLE_CRASH_DEMO !== "1") throw new HttpError(403, "生产环境已禁用模拟崩溃");

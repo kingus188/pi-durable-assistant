@@ -43,10 +43,14 @@
     <aside class="sidebar-left" id="sidebar-left">
       <div class="sidebar-left-header">
         <div class="brand-wrap">
-          <div class="brand-icon">D</div>
-          <span class="brand-title">Pi Durable 小助手</span>
+          <div class="brand-icon" aria-hidden="true">D</div>
+          <span class="brand-title" title="Pi Durable 小助手">小助手</span>
         </div>
         <button class="btn-new-conv" onclick="createNewConversation()">＋ 新对话</button>
+        <div class="conv-switch" role="tablist" aria-label="会话范围">
+          <button type="button" class="conv-switch-btn is-on" id="conv-tab-active" role="tab" aria-selected="true" onclick="setConversationView('active')">当前 <span class="conv-count" id="conv-count-active">0</span></button>
+          <button type="button" class="conv-switch-btn" id="conv-tab-archived" role="tab" aria-selected="false" onclick="setConversationView('archived')">归档 <span class="conv-count" id="conv-count-archived">0</span></button>
+        </div>
       </div>
       <nav class="conversation-list" id="conversation-list" aria-label="会话列表">
         <!-- 动态渲染 -->

@@ -1,6 +1,9 @@
     // --- 状态管理 ---
     let currentConversationId = null;
     let conversations = [];
+    let conversationView = 'active';
+    let pendingRemoveId = null;
+    let shelfBusy = false;
     let currentEventSource = null;
     let currentViewData = null;
     let serverInfo = null;
@@ -659,6 +662,21 @@
       return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+    function formatListTime(timestamp) {
+      if (!timestamp) return '';
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const now = new Date();
+      const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startThat = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dayDiff = Math.round((startToday - startThat) / 86400000);
+      if (dayDiff === 0) return `今天 ${hm}`;
+      if (dayDiff === 1) return `昨天 ${hm}`;
+      return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
     function formatDuration(ms) {
       if (ms <= 0) return '0 秒';
       const totalSec = Math.floor(ms / 1000);
@@ -770,34 +788,43 @@
         const res = await fetch('/api/conversations');
         if (!res.ok) throw new Error('拉取会话列表失败');
         conversations = await res.json();
-        renderConversationList();
-        updateConversationHeaders();
+        if (pendingRemoveId && !conversations.some((c) => String(c.id) === pendingRemoveId)) pendingRemoveId = null;
 
-        if (isInitial || !currentConversationId) {
+        // 只在第一次进入时自动打开。之后用户把当前对话清空，10 秒刷新不能再偷偷建一条。
+        if (isInitial) {
           const hashId = parseHashConversationId();
           if (hashId !== null) {
-            const exists = conversations.some(c => String(c.id) === String(hashId));
-            if (exists) {
-              if (String(currentConversationId) !== String(hashId)) {
-                selectConversation(hashId);
-              }
-              return;
-            }
-            // 如果不在列表中（可能是子 Agent 会话），直接打开
-            if (String(currentConversationId) !== String(hashId)) {
-              selectConversation(hashId);
-              return;
-            }
+            const hashed = conversations.find((c) => String(c.id) === String(hashId));
+            if (hashed?.archivedAt) conversationView = 'archived';
+            renderConversationList();
+            updateConversationHeaders();
+            if (String(currentConversationId) !== String(hashId)) selectConversation(hashId);
+            return true;
           }
-
-          if (conversations.length > 0) {
-            selectConversation(conversations[0].id);
-          } else {
+          const firstActive = conversations.find((c) => !c.archivedAt);
+          if (firstActive) {
+            renderConversationList();
+            updateConversationHeaders();
+            selectConversation(firstActive.id);
+            return true;
+          }
+          if (conversations.length === 0) {
             await createNewConversation();
+            return true;
           }
+          conversationView = 'active';
+          renderConversationList();
+          updateConversationHeaders();
+          clearOpenConversation();
+          return true;
         }
+
+        renderConversationList();
+        updateConversationHeaders();
+        return true;
       } catch (err) {
         console.error('拉取会话列表出错:', err);
+        return false;
       }
     }
 
@@ -815,6 +842,8 @@
         });
         if (!res.ok) throw new Error('新建会话失败');
         const data = await res.json();
+        conversationView = 'active';
+        pendingRemoveId = null;
         closeSidebarDrawer();
         selectConversation(data.id);
         await fetchConversations();
@@ -836,7 +865,7 @@
 
     function updateConversationHeaders() {
       const current = conversations.find(c => String(c.id) === String(currentConversationId));
-      let title = '新对话';
+      let title = currentConversationId ? '新对话' : '未选择对话';
       if (current) {
         title = current.forkOf ? `⑂ ${current.title}` : current.title;
       } else if (currentViewData && currentViewData.parentId) {
@@ -848,35 +877,215 @@
 
       if (desktopTitleEl) desktopTitleEl.textContent = title;
       if (mobileTitleEl) mobileTitleEl.textContent = title;
-      if (desktopMetaEl && current && current.createdAt) {
-        desktopMetaEl.textContent = formatTime(current.createdAt);
+      if (desktopMetaEl) {
+        desktopMetaEl.textContent = current?.createdAt ? formatTime(current.createdAt) : '';
       }
+    }
+
+    function setConversationView(view) {
+      conversationView = view === 'archived' ? 'archived' : 'active';
+      pendingRemoveId = null;
+      renderConversationList();
+    }
+
+    function syncConversationTabs() {
+      const activeCount = conversations.filter((c) => !c.archivedAt).length;
+      const archivedCount = conversations.length - activeCount;
+      const activeBtn = document.getElementById('conv-tab-active');
+      const archivedBtn = document.getElementById('conv-tab-archived');
+      const activeNum = document.getElementById('conv-count-active');
+      const archivedNum = document.getElementById('conv-count-archived');
+      if (activeNum) activeNum.textContent = String(activeCount);
+      if (archivedNum) archivedNum.textContent = String(archivedCount);
+      const archivedOn = conversationView === 'archived';
+      if (activeBtn) {
+        activeBtn.classList.toggle('is-on', !archivedOn);
+        activeBtn.setAttribute('aria-selected', archivedOn ? 'false' : 'true');
+      }
+      if (archivedBtn) {
+        archivedBtn.classList.toggle('is-on', archivedOn);
+        archivedBtn.setAttribute('aria-selected', archivedOn ? 'true' : 'false');
+      }
+      return { activeCount, archivedCount };
+    }
+
+    function makeConvButton(action, label, title, danger) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'conv-action' + (danger ? ' conv-action-danger' : '');
+      button.dataset.action = action;
+      button.textContent = label;
+      if (title) button.title = title;
+      return button;
     }
 
     function renderConversationList() {
       const listEl = stagingFor('conversation-list');
+      const { archivedCount } = syncConversationTabs();
       if (!listEl) return;
-      listEl.innerHTML = '';
+      const archivedOn = conversationView === 'archived';
+      const realList = document.getElementById('conversation-list');
+      if (realList) realList.classList.toggle('is-archived-view', archivedOn);
+      const visible = conversations.filter((c) => archivedOn ? !!c.archivedAt : !c.archivedAt);
 
-      conversations.forEach(c => {
-        const item = document.createElement('div');
+      if (visible.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'conv-empty';
+        empty.textContent = archivedOn
+          ? '还没有归档的对话。'
+          : (archivedCount > 0 ? `当前没有对话。归档里还有 ${archivedCount} 个。` : '当前没有对话。');
+        listEl.appendChild(empty);
+        return;
+      }
+
+      visible.forEach((c) => {
+        const item = document.createElement('article');
         const isActive = String(c.id) === String(currentConversationId);
-        item.className = 'conversation-item' + (isActive ? ' active' : '');
-        item.onclick = () => {
-          selectConversation(c.id);
-          closeSidebarDrawer();
-        };
+        const confirming = pendingRemoveId === String(c.id);
+        item.className = 'conversation-item' + (isActive ? ' active' : '') + (confirming ? ' is-confirming' : '');
+        item.dataset.id = String(c.id);
 
+        const open = document.createElement('button');
+        open.type = 'button';
+        open.className = 'conv-open';
+        open.dataset.action = 'open';
+        const titleRow = document.createElement('span');
+        titleRow.className = 'conv-title-row';
         const isFork = !!c.forkOf || (c.title && c.title.startsWith('分叉'));
-        item.innerHTML = `
-          <div class="conv-title-row">
-            ${isFork ? '<span class="conv-fork-icon">⑂</span>' : ''}
-            <span>${escapeHtml(c.title || '新对话')}</span>
-          </div>
-          <div class="conv-time">${escapeHtml(formatShortTime(c.createdAt))}</div>
-        `;
+        if (isFork) {
+          const fork = document.createElement('span');
+          fork.className = 'conv-fork-icon';
+          fork.textContent = '⑂';
+          titleRow.appendChild(fork);
+        }
+        const title = document.createElement('span');
+        title.className = 'conv-title';
+        title.textContent = c.title || '新对话';
+        titleRow.appendChild(title);
+        const stamp = archivedOn ? (c.archivedAt || c.createdAt) : c.createdAt;
+        const time = document.createElement('span');
+        time.className = 'conv-time';
+        time.textContent = formatListTime(stamp);
+        time.title = formatTime(stamp);
+        open.appendChild(titleRow);
+        open.appendChild(time);
+        item.appendChild(open);
+
+        if (confirming) {
+          const confirm = document.createElement('div');
+          confirm.className = 'conv-confirm';
+          const note = document.createElement('p');
+          note.textContent = '只从列表移除，本机记录还在。确定？';
+          const actions = document.createElement('div');
+          actions.className = 'conv-actions';
+          actions.appendChild(makeConvButton('cancel-remove', '取消', '留在列表里'));
+          actions.appendChild(makeConvButton('confirm-remove', '删除', '只从列表移除，本机记录还在', true));
+          confirm.appendChild(note);
+          confirm.appendChild(actions);
+          item.appendChild(confirm);
+        } else {
+          const actions = document.createElement('div');
+          actions.className = 'conv-actions';
+          if (archivedOn) {
+            actions.appendChild(makeConvButton('restore', '恢复', '放回当前列表。已停掉的提醒和计划不会自动恢复。'));
+          } else {
+            actions.appendChild(makeConvButton('archive', '归档', '从当前列表收起，并停掉未完成的提醒和计划'));
+          }
+          actions.appendChild(makeConvButton('remove', '删除', '只从列表移除，本机记录还在', true));
+          item.appendChild(actions);
+        }
         listEl.appendChild(item);
       });
+    }
+
+    async function postShelf(id, action) {
+      const res = await fetch(`/api/conversations/${encodeURIComponent(id)}/${action}`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || '操作失败');
+      return body;
+    }
+
+    function clearOpenConversation() {
+      const es = currentEventSource;
+      currentEventSource = null;
+      if (es) es.close();
+      currentConversationId = null;
+      currentViewData = null;
+      if (window.location.hash) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      updateConversationHeaders();
+      const chatEl = document.getElementById('messages-container');
+      if (chatEl) {
+        const container = document.createElement('div');
+        renderEmptyConversation(container);
+        patchChildren(chatEl, container);
+      }
+      renderNotes({ todos: [], memos: [] });
+      renderReminders([]);
+      renderTasks([]);
+      updateBusyControls(false, 0);
+      renderConversationList();
+    }
+
+    async function runShelf(id, action) {
+      if (shelfBusy) return;
+      shelfBusy = true;
+      const wasCurrent = String(currentConversationId) === String(id);
+      try {
+        const result = await postShelf(id, action);
+        pendingRemoveId = null;
+        if (action === 'remove') {
+          conversations = conversations.filter((c) => String(c.id) !== String(id));
+        } else {
+          const item = conversations.find((c) => String(c.id) === String(id));
+          if (item) item.archivedAt = result.archivedAt ?? null;
+        }
+        if (action === 'restore' && wasCurrent) conversationView = 'active';
+        renderConversationList();
+        await fetchConversations();
+        if (wasCurrent && action !== 'restore') {
+          const next = conversations.find((c) => !c.archivedAt);
+          if (next) selectConversation(next.id);
+          else clearOpenConversation();
+        }
+      } catch (err) {
+        showToast(err.message || '操作失败', 'warning');
+      } finally {
+        shelfBusy = false;
+      }
+    }
+
+    function handleConversationAction(id, action) {
+      if (!id) return;
+      if (action === 'open') {
+        selectConversation(id);
+        closeSidebarDrawer();
+        return;
+      }
+      if (action === 'remove') {
+        pendingRemoveId = String(id);
+        renderConversationList();
+        return;
+      }
+      if (action === 'cancel-remove') {
+        pendingRemoveId = null;
+        renderConversationList();
+        return;
+      }
+      if (action === 'confirm-remove') {
+        void runShelf(id, 'remove');
+        return;
+      }
+      if (action === 'archive' || action === 'restore') void runShelf(id, action);
+    }
+
+    function onConversationListClick(e) {
+      const actionEl = e.target.closest('[data-action]');
+      if (!actionEl || !e.currentTarget.contains(actionEl)) return;
+      const item = actionEl.closest('.conversation-item');
+      if (!item) return;
+      handleConversationAction(item.dataset.id, actionEl.dataset.action);
     }
 
     // --- SSE 连接与数据渲染 ---
@@ -897,6 +1106,8 @@
       };
 
       es.onerror = () => {
+        // 切换会话时旧连接被关掉，也会触发 error。那不是断线。
+        if (currentEventSource !== es) return;
         showReconnectBanner();
       };
 
@@ -1754,7 +1965,10 @@
       const textarea = document.getElementById('chat-textarea');
       const text = (textarea ? textarea.value : '').trim();
       if (!text && pendingAttachments.length === 0) return;
-      if (!currentConversationId) return;
+      if (!currentConversationId) {
+        await createNewConversation();
+        if (!currentConversationId) return;
+      }
 
       const steerCheckbox = document.getElementById('steer-checkbox');
       const mode = steerCheckbox && steerCheckbox.checked ? 'steer' : 'followUp';
@@ -1924,6 +2138,13 @@
       startConversationsInterval();
       setupDragAndDrop();
 
+      const chatContainer = document.getElementById('messages-container');
+      if (chatContainer) {
+        chatContainer.addEventListener('scroll', () => {
+          autoScrollChat = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 80;
+        });
+      }
+
       const fileInput = document.getElementById('file-input');
       if (fileInput) {
         fileInput.addEventListener('change', async () => {
@@ -1981,9 +2202,14 @@
       window.addEventListener('hashchange', () => {
         const hashId = parseHashConversationId();
         if (hashId !== null && String(hashId) !== String(currentConversationId)) {
+          const hashed = conversations.find((c) => String(c.id) === String(hashId));
+          if (hashed?.archivedAt) conversationView = 'archived';
           selectConversation(hashId);
         }
       });
+
+      const conversationList = document.getElementById('conversation-list');
+      if (conversationList) conversationList.addEventListener('click', onConversationListClick);
     });
 
     // 显式挂载到 window，确保 inline onclick 与外部完全兼容
@@ -1997,6 +2223,7 @@
     window.openSidebarDrawer = openSidebarDrawer;
     window.closeSidebarDrawer = closeSidebarDrawer;
     window.createNewConversation = createNewConversation;
+    window.setConversationView = setConversationView;
     window.goBackToParentConversation = goBackToParentConversation;
     window.toggleMobileMascotBubble = toggleMobileMascotBubble;
     window.toggleToolResultExpand = toggleToolResultExpand;

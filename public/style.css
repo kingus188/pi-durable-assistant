@@ -188,7 +188,7 @@ button, input, textarea {
    左栏：会话列表
    ========================================================= */
 .sidebar-left {
-  width: 260px;
+  width: 280px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -260,6 +260,42 @@ button, input, textarea {
   opacity: 0.92;
   transform: translateY(-1px);
 }
+.conv-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-subtle);
+  border-radius: 9px;
+}
+.conv-switch-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.conv-switch-btn.is-on {
+  background: var(--bg-surface);
+  color: var(--text-main);
+  box-shadow: var(--shadow-xs);
+}
+.conv-count {
+  margin-left: 4px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-light);
+}
+.conv-switch-btn.is-on .conv-count {
+  color: var(--primary);
+}
 .conversation-list {
   flex: 1;
   overflow-y: auto;
@@ -269,15 +305,10 @@ button, input, textarea {
   gap: 4px;
 }
 .conversation-item {
-  padding: 10px 12px;
+  position: relative;
   border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
   border: 1px solid transparent;
-  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .conversation-item:hover {
   background-color: var(--bg-subtle);
@@ -286,24 +317,126 @@ button, input, textarea {
   background-color: var(--primary-light);
   border-color: var(--primary-border);
 }
+.conversation-item.active:hover {
+  background-color: var(--primary-light);
+}
+.conversation-item.is-confirming {
+  background: var(--danger-bg);
+  border-color: transparent;
+}
+.conversation-item.is-confirming .conv-time {
+  padding-right: 0;
+}
+.conv-open {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: inherit;
+}
 .conv-title-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 13.5px;
   font-weight: 500;
   color: var(--text-main);
+}
+.conv-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .conv-fork-icon {
+  flex-shrink: 0;
   color: var(--primary);
   font-weight: bold;
 }
 .conv-time {
+  padding-right: 92px;
   font-size: 11.5px;
+  line-height: 32px;
   color: var(--text-muted);
+}
+.conversation-item > .conv-actions,
+.conv-confirm .conv-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.conversation-item > .conv-actions {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+}
+.conv-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.conv-action:hover {
+  background: var(--bg-surface);
+  color: var(--text-main);
+}
+.conv-action-danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.conv-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 8px 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-main);
+}
+.conv-confirm p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.conv-confirm .conv-actions {
+  justify-content: flex-end;
+}
+.conv-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+@media (hover: hover) and (pointer: fine) {
+  /* 当前列表里，没选中的行把操作留到悬停。归档列表的主要动作就是恢复和删除，一直显示。 */
+  .conversation-list:not(.is-archived-view) .conversation-item:not(.active):not(.is-confirming) > .conv-actions {
+    opacity: 0;
+  }
+  .conversation-list:not(.is-archived-view) .conversation-item:not(.active):hover > .conv-actions,
+  .conversation-list:not(.is-archived-view) .conversation-item:not(.active):focus-within > .conv-actions {
+    opacity: 1;
+  }
 }
 
 /* =========================================================
@@ -588,7 +721,7 @@ button, input, textarea {
     left: 16px !important;
     right: auto !important;
     bottom: 16px !important;
-    width: 228px;
+    width: 248px;
   }
   #conversation-list {
     padding-bottom: 72px;
@@ -1887,9 +2020,11 @@ button, input, textarea {
   }
   .sidebar-left.open {
     transform: translateX(0);
+    z-index: 2600;
   }
   .drawer-backdrop.open {
     display: block;
+    z-index: 2550;
   }
 
   /* 中栏桌面端标题隐藏 */
@@ -1984,10 +2119,24 @@ button, input, textarea {
 
   /* 移动端任务中心悬浮按钮位于底部吸附输入栏上方，绝不遮挡发送按钮 */
   #v3-toggle {
-    bottom: 84px !important;
+    top: 64px !important;
+    bottom: auto !important;
     right: 16px !important;
     padding: 8px 14px !important;
     font-size: 12.5px !important;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28) !important;
+  }
+}
+
+/* Fix v3-drawer position to not block sidebars and input */
+@media (min-width: 861px) {
+  #v3-drawer {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    right: auto !important;
+    bottom: 100px !important;
+    top: 16px !important;
+    width: 420px !important;
+    max-height: calc(100vh - 120px) !important;
   }
 }

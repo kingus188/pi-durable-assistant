@@ -8,7 +8,7 @@
 [![CI](https://github.com/xiaomoBoy/pi-durable-assistant/actions/workflows/v3-ci.yml/badge.svg)](https://github.com/xiaomoBoy/pi-durable-assistant/actions/workflows/v3-ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> **项目状态：个人单用户项目 / 可体验的实验性实现，不是 Pi Durable 官方产品。** 当前 `main` 包含 v3 任务中心、网页附件和微信适配代码；部分知识库、文件审批和可靠通知增强功能仍在独立 PR 中，**未合并到主分支**。生产环境请自行做好 HTTPS、访问控制和 SQLite 备份。
+> **项目状态：个人单用户项目 / 可体验的实验性实现，不是 Pi Durable 官方产品。** 当前 `main` 包含 v3 任务中心、网页附件、微信适配、需批准的跨会话记忆，以及只读笔记检索。文件审批和可靠通知增强仍在独立 PR 中，**未合并到主分支**。生产环境请自行做好 HTTPS、访问控制和 SQLite 备份。
 
 ![Pi Durable Assistant 网页界面：聊天、任务中心和运行状态](docs/screenshot.png)
 
@@ -31,8 +31,12 @@
 | 主动通知 | 可选通用 Webhook / 飞书文本机器人；主分支目前为尽力发送 |
 | 微信 iLink | 可选 `wx-bot` 容器，文字与语音转写文字收发；其他媒体不解析 |
 | 导出 | 当前会话用户与助手的可见文字导出为 Markdown |
+| 长期记忆 | 助手用 `propose_memory` 提交候选；任务中心批准后，之后的会话都能看到。直接写下的事实立即生效。只存在本机 SQLite |
+| 技能 | 已批准技能只在提示里放名称和触发条件；助手用 `read_skill` 再读全文。新技能需批准 |
+| 笔记检索 | 配置 `OBSIDIAN_ROOT` 后只读检索白名单笔记，回答带来源路径和行号。不写回 Obsidian |
+| 会话列表 | 左侧可在「当前」和「归档」之间切换。归档会收起对话，并停掉未完成的提醒、计划和后台任务。删除只从菜单拿掉，本机记录还在。微信通道正在使用的会话不能归档或删除 |
 
-**尚未在 `main` 交付：** Obsidian 只读检索（[PR #4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4)）、受控工作区及审批（[PR #5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5)）、持久通知 Outbox（[PR #6](https://github.com/xiaomoBoy/pi-durable-assistant/pull/6)）。PR 的代码和自动化测试不能视为已经部署上线。
+**尚未在 `main` 交付：** 受控工作区及审批（[PR #5](https://github.com/xiaomoBoy/pi-durable-assistant/pull/5)）、持久通知 Outbox（[PR #6](https://github.com/xiaomoBoy/pi-durable-assistant/pull/6)）。只读笔记检索已在主分支实现，不依赖未合并的 [PR #4](https://github.com/xiaomoBoy/pi-durable-assistant/pull/4)。PR 的代码和自动化测试不能视为已经部署上线。
 
 ## Cloudflare 版本：Pi Durable Edge
 
@@ -116,6 +120,8 @@ docker compose logs --tail=100 pi-durable-assistant
 - `server.mjs`：HTTP API、鉴权、SSE、静态文件与消息处理。
 - `lib/agent.mjs`：Pi Durable Harness、模型与 Agent 工具。
 - `lib/v3.mjs`：周期任务、后台 Subagent、管理命令和可选通知。
+- `lib/personal.mjs`：跨会话记忆、技能候选和提示注入。
+- `lib/knowledge.mjs`：Obsidian 白名单只读检索。
 - `lib/attachments.mjs`：网页图片/文本附件的校验与转换。
 - `lib/wechat.mjs`：微信通道的会话绑定和消息持久化。
 - `public/index.html` + `public/app.js` + `public/style.css`：浏览器聊天 UI。
@@ -129,6 +135,8 @@ npm test
 ```
 
 CI 使用本地 `faux` 模型和模拟通道，不等于真实微信扫码、生产模型、真实浏览器和 VPS 的端到端验收。若要反馈问题，请附操作系统、Node/Docker 版本、复现步骤及**已脱敏**的错误日志。
+
+长期记忆和技能只存在本机 SQLite，不会写回 Obsidian。从菜单删除会话只去掉列表项，本机记录还在。归档会停掉该会话未完成的提醒、计划和后台任务。知识库默认只开放三个内容目录，财务、个人档案和服务器资产不在检索范围内。
 
 ## 许可证
 
