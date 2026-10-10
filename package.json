@@ -1,0 +1,17 @@
+{
+  "name": "pi-durable-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "一个网页版个人 Agent，演示 Pi Durable 的持久化、断点恢复、Document、Fork 和多端同步",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "sh scripts/dev.sh"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-durable": "1.1.0"
+  }
+}
