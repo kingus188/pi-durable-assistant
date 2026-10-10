@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSchedule, nextOccurrence, scheduleMatches } from "../lib/v3-utils.mjs";
+import { normalizeSchedule, nextOccurrence, scheduleMatches, normalizeRequestId } from "../lib/v3-utils.mjs";
 
 test("仅允许合理延迟与重复间隔", () => {
   const s = normalizeSchedule({ text: "  查新闻 ", minutesFromNow: 2, everyMinutes: 1440 }, 100000);
@@ -22,4 +22,13 @@ test("旧版本任务和暂停计划不能触发", () => {
   assert.equal(scheduleMatches(item, { at: 12345, revision: 2 }), true);
   assert.equal(scheduleMatches(item, { at: 12345, revision: 1 }), false);
   assert.equal(scheduleMatches({ ...item, status: "paused" }, { at: 12345, revision: 2 }), false);
+});
+
+test("requestId 不能与原型链属性冲突", () => {
+  for (const key of ["__proto__", "constructor", "prototype"]) {
+    assert.throws(() => normalizeRequestId(key), /requestId/);
+  }
+  assert.equal(normalizeRequestId("tool:call_123"), "tool:call_123");
+  assert.equal(normalizeRequestId(null), null);
+  assert.throws(() => normalizeRequestId("a".repeat(101)), /requestId/);
 });
