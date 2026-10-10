@@ -1,8 +1,10 @@
-# Pi Durable Edge
+# Pi Durable Edge（原仓库内的历史 v0.1 快照）
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-assistant/tree/main/cloudflare)
+> **当前维护入口已经迁移到 [xiaomoBoy/pi-durable-edge](https://github.com/xiaomoBoy/pi-durable-edge)。** 本目录只保留原始实现作为参考，新部署和 v0.2 功能请使用独立仓库；下方按钮也已改为最新仓库。
 
-**[中文一键部署教程（零命令行）→](docs/DEPLOY.md)** · [Cloudflare 官方部署按钮说明](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-edge)
+
+**[最新中文部署教程 →](https://github.com/xiaomoBoy/pi-durable-edge/blob/main/docs/DEPLOY.md)** · [Cloudflare 官方部署按钮说明](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
 
 > 原项目：[xiaomoBoy/pi-durable-assistant](https://github.com/xiaomoBoy/pi-durable-assistant)。Pi Durable Edge 是原项目的 Cloudflare Workers 版本，不影响原项目的 Docker / VPS 部署。**当前处于 v0.1 初始开发阶段，计划持续迭代；尚未在真实 Cloudflare 账户验证运行，Beta 兼容性以部署日志为准。**
 
