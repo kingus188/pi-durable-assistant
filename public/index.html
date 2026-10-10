@@ -18,6 +18,24 @@
   <!-- 移动端抽屉遮罩 -->
   <div id="drawer-backdrop" class="drawer-backdrop" onclick="closeSidebarDrawer()"></div>
 
+  <!-- 移动端顶部标题栏 -->
+  <header class="mobile-header">
+    <button class="mobile-menu-btn" onclick="openSidebarDrawer()" aria-label="打开会话列表">☰</button>
+    <div class="mobile-header-title" id="mobile-current-title">新对话</div>
+    <div class="mobile-actions">
+      <!-- 移动端右上角小 D 挂件 -->
+      <div class="mobile-mascot-btn" id="mobile-mascot" data-state="idle" onclick="toggleMobileMascotBubble(event)" title="小 D">
+        <svg class="mascot-svg" viewBox="0 0 100 100" id="mobile-mascot-svg">
+          <!-- 动态内联 SVG -->
+        </svg>
+        <div class="mascot-bubble" id="mobile-mascot-bubble">
+          <div class="bubble-tag" id="mobile-bubble-tag">就绪</div>
+          <div class="bubble-text" id="mobile-bubble-text">小 D 等待任务</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
   <!-- 侧边栏 -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
@@ -83,11 +101,17 @@
   <!-- 崩溃确认弹窗 -->
   <div class="modal" id="crash-modal" hidden>
     <div class="modal-content">
-      <h3>模拟进程崩溃</h3>
-      <p>将强制终止当前进程（用于演示断点恢复）。确认继续？</p>
+      <div class="modal-header">
+        ⚠️ 确认模拟进程崩溃？
+      </div>
+      <div class="modal-body">
+        <p>将向服务器发送 <code>POST /api/crash</code> 请求，服务器将在 200ms 后强制退出进程（<code>process.exit(1)</code>）。</p>
+        <br>
+        <p>随后由后台守护脚本自动重启进程。网页将显示断线重连横条，并在恢复后显示启动次数 +1，同时自动恢复未完成的任务。</p>
+      </div>
       <div class="modal-actions">
-        <button class="btn-secondary" onclick="hideCrashModal()">取消</button>
-        <button class="btn-danger" id="btn-modal-confirm" onclick="confirmCrash()">确认崩溃</button>
+        <button class="btn-modal-cancel" onclick="closeCrashModal()">取消</button>
+        <button class="btn-modal-confirm" id="btn-modal-confirm" onclick="confirmCrash()">确认崩溃</button>
       </div>
     </div>
   </div>
