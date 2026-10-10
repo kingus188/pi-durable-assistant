@@ -1,5 +1,5 @@
 {
-  "name": "pi-durable-cloudflare-demo",
+  "name": "pi-durable-edge",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,5 +15,5 @@
     "@earendil-works/pi-durable": "1.1.0"
   },
   "devDependencies": { "wrangler": "^4.0.0" },
-  "cloudflare": { "bindings": { "DEMO_TOKEN": { "description": "Choose a long random access token to protect your demo (e.g. 32+ random characters)." } } }
+  "cloudflare": { "bindings": { "ACCESS_TOKEN": { "description": "Choose a long random access token to protect your Pi Durable Edge instance (e.g. 32+ random characters)." } } }
 }
