@@ -2,6 +2,8 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/xiaomoBoy/pi-durable-assistant/tree/main/cloudflare)
 
+**[中文一键部署教程（零命令行）→](docs/DEPLOY.md)** · [Cloudflare 官方部署按钮说明](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
+
 > 原项目：[xiaomoBoy/pi-durable-assistant](https://github.com/xiaomoBoy/pi-durable-assistant)。Pi Durable Edge 是原项目的 Cloudflare Workers 版本，不影响原项目的 Docker / VPS 部署。**当前处于 v0.1 初始开发阶段，计划持续迭代；尚未在真实 Cloudflare 账户验证运行，Beta 兼容性以部署日志为准。**
 
 ## 当前版本范围和原理
@@ -15,9 +17,9 @@
 
 1. 登录 Cloudflare Free 账户，点击顶部 **Deploy to Cloudflare**。
 2. Cloudflare 从公开 GitHub 仓库的 `cloudflare/` 子目录克隆此应用，并自动创建 Worker + SQLite-backed Durable Object。确认 Worker 名 `pi-durable-edge`。
-3. 为 `ACCESS_TOKEN` 填写至少 24 字符的随机访问令牌。建议生成：`openssl rand -hex 24`。如果部署面板没有提供密钥输入栏，部署后在 Worker **Settings → Variables and Secrets** 添加 `ACCESS_TOKEN` Secret，再重新部署/保存。
+3. **唯一必须配置的应用 Secret：`ACCESS_TOKEN`**。请输入自己生成的至少 24 字符随机访问令牌（建议 `openssl rand -hex 24` 或使用密码管理器）；不要复用仓库中的示例值。密钥仅保存在自己的 Cloudflare 账户，**不得提交到公开仓库**。如部署页没有 Secret 输入框，部署后进入 Worker **Settings → Variables and Secrets** 添加同名 Secret，保存并重新部署。
 4. 打开分配的 `*.workers.dev` URL，输入同一个 Token 并连接。
-5. 发送一条消息，12 秒后刷新状态看到固定回复；创建一个 10 秒提醒，到期后刷新页面看到“已触发”。
+5. 点击网页中的 **“一键功能自检”**：自动验证固定模拟回复、同操作 ID 幂等提交、SQLite 状态与 5 秒提醒到期。请注意自检不能代替真实崩溃恢复测试。
 
 > 免费限制：Workers Free 支持 SQLite-backed Durable Objects，但会受 CPU、持续运行时间、数据库读写等日限额约束。**不保证免费计划能在所有账户和运行负载下跑通完整 PiHarness。** 超额通常报错而非自动扣费。不要误把页面刷新当成真实的 Worker 崩溃测试。
 
@@ -33,7 +35,7 @@ npm run dev
 # 浏览器打开 Wrangler 输出的本地地址
 ```
 
-如果要部署至自己的 Cloudflare 账户，也可以手动运行 `npm run deploy`，再通过 `npx wrangler secret put ACCESS_TOKEN` 设置密钥。
+一键部署遇到问题时，参考 [完整教程](docs/DEPLOY.md) 中的 Wrangler 备用命令；不需要另外手动创建 Durable Object。
 
 ## 验收方法
 
