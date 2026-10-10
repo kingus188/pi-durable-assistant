@@ -528,6 +528,52 @@
       word-break: break-word;
     }
 
+    /* 错误系统卡片（居中呈现） */
+    .error-system-row {
+      justify-content: center;
+      margin: 8px 0;
+    }
+    .error-system-card {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: var(--danger-bg);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      padding: 10px 18px;
+      border-radius: var(--radius-md);
+      font-size: 13.5px;
+      box-shadow: var(--shadow-xs);
+      max-width: 85%;
+      text-align: center;
+    }
+    .error-system-main {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      word-break: break-word;
+    }
+    .error-count-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 11.5px;
+      font-weight: 700;
+      border-radius: 10px;
+      background-color: var(--danger);
+      color: #ffffff;
+      line-height: 1.3;
+      vertical-align: middle;
+    }
+    .error-system-sub {
+      font-size: 12px;
+      opacity: 0.85;
+      font-weight: normal;
+    }
+
     .assistant-row {
       justify-content: flex-start;
       max-width: 88%;
@@ -922,7 +968,7 @@
 
     /* 小 D 状态表现与 CSS 动画 */
     .d-expr-idle, .d-expr-disconnected, .d-expr-recovered, .d-expr-waiting,
-    .d-expr-tool, .d-expr-thinking, .d-expr-reminder,
+    .d-expr-tool, .d-expr-thinking, .d-expr-reminder, .d-expr-error,
     .d-smoke, .d-zzz, .d-prop-tool, .d-prop-clock, .d-wave-pulse {
       display: none;
     }
@@ -1089,6 +1135,22 @@
     @keyframes xdBlink {
       0%, 92%, 100% { transform: scaleY(1); }
       96% { transform: scaleY(0.1); }
+    }
+
+    /* 8. 出错状态 */
+    [data-state="error"] .d-expr-error {
+      display: block;
+    }
+    [data-state="error"] .mascot-svg {
+      animation: xdSadSway 2.8s infinite ease-in-out;
+    }
+    [data-state="error"] .mascot-status-tag {
+      background: var(--danger-bg);
+      color: var(--danger);
+    }
+    @keyframes xdSadSway {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(2px); }
     }
 
     /* --- 记事本 --- */
@@ -1868,6 +1930,18 @@
           <path d="M46 52 Q50 55 54 52" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" fill="none" />
         </g>
 
+        <!-- 8. 出错表情（难过眼睛，委屈瘪嘴，眼角带泪光） -->
+        <g class="d-expr-error">
+          <path d="M35 39 L42 42" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+          <path d="M65 39 L58 42" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+          <ellipse cx="39" cy="45" rx="3.5" ry="4" fill="#38bdf8" />
+          <ellipse cx="61" cy="45" rx="3.5" ry="4" fill="#38bdf8" />
+          <circle cx="40" cy="44" r="1.2" fill="#ffffff" />
+          <circle cx="62" cy="44" r="1.2" fill="#ffffff" />
+          <path d="M46 53 Q50 49 54 53" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" fill="none" />
+          <circle cx="35" cy="50" r="1.5" fill="#38bdf8" />
+        </g>
+
         <!-- 身体躯干 -->
         <rect x="33" y="68" width="34" height="24" rx="8" fill="#6366f1" />
         <rect x="42" y="74" width="16" height="12" rx="4" fill="#4338ca" />
@@ -2285,6 +2359,21 @@
       const otherRunningTool = runningTools.find(t => t.name !== 'wait_seconds' && t.name !== '等待');
       const isBusy = view ? (!!view.busy || (view.live && Object.keys(view.live).length > 0)) : false;
 
+      // 检查当前会话最后一条消息是否为错误（忽略没有 text、没有 toolCalls、也没有 error 的无效 assistant 条目）
+      const renderableEntries = (view && Array.isArray(view.entries))
+        ? view.entries.filter(e => {
+            if (e.kind === 'assistant') {
+              const hasText = !!(e.text && e.text.trim());
+              const hasToolCalls = Array.isArray(e.toolCalls) && e.toolCalls.length > 0;
+              const hasError = !!e.error;
+              return hasText || hasToolCalls || hasError;
+            }
+            return true;
+          })
+        : [];
+      const lastEntry = renderableEntries.length > 0 ? renderableEntries[renderableEntries.length - 1] : null;
+      const isLastError = !!(lastEntry && lastEntry.kind === 'assistant' && lastEntry.error);
+
       // 1. 断线（优先级最高）
       if (isDisconnected) {
         state = 'disconnected';
@@ -2327,7 +2416,13 @@
         bubbleText = '思考中……';
         tagText = '思考中';
       }
-      // 6. 有提醒（空闲且有 scheduled 提醒）
+      // 6. 出错（当前会话最后一条是错误、且不忙时）
+      else if (isLastError) {
+        state = 'error';
+        bubbleText = '模型那边出错了……';
+        tagText = '出错';
+      }
+      // 7. 有提醒（空闲且有 scheduled 提醒）
       else if (view && Array.isArray(view.reminders) && view.reminders.some(r => r.status === 'scheduled')) {
         const scheduled = view.reminders.filter(r => r.status === 'scheduled');
         scheduled.sort((a, b) => a.at - b.at);
@@ -2341,7 +2436,7 @@
         }
         tagText = '有提醒';
       }
-      // 7. 空闲（默认 fallback）
+      // 8. 空闲（默认 fallback）
       else {
         state = 'idle';
         bubbleText = '有事叫我～';
@@ -2399,10 +2494,18 @@
       container.innerHTML = '';
 
       // 2. 空会话：显示 4 个示例引导按钮
-      const hasEntries = Array.isArray(view.entries) && view.entries.length > 0;
+      const hasRenderableEntries = Array.isArray(view.entries) && view.entries.some(e => {
+        if (e.kind === 'assistant') {
+          const hasText = !!(e.text && e.text.trim());
+          const hasToolCalls = Array.isArray(e.toolCalls) && e.toolCalls.length > 0;
+          const hasError = !!e.error;
+          return hasText || hasToolCalls || hasError;
+        }
+        return true;
+      });
       const isBusy = !!view.busy || (view.live && Object.keys(view.live).length > 0);
 
-      if (!hasEntries && !isBusy) {
+      if (!hasRenderableEntries && !isBusy) {
         renderEmptyConversation(container);
       }
 
@@ -2437,7 +2540,8 @@
 
       // 3. 渲染历史 Entry
       if (Array.isArray(view.entries)) {
-        for (const entry of view.entries) {
+        for (let i = 0; i < view.entries.length; i++) {
+          const entry = view.entries[i];
           if (entry.kind === 'user') {
             const rawText = entry.text || '';
             // 以 [定时提醒] 开头的用户消息：显示为居中的 ⏰ 提醒系统卡片
@@ -2465,27 +2569,61 @@
               container.appendChild(row);
             }
           } else if (entry.kind === 'assistant') {
-            const row = document.createElement('div');
-            row.className = 'message-row assistant-row';
-
-            let assistantHtml = '<div class="assistant-wrapper">';
-            if (entry.text) {
-              assistantHtml += `<div class="assistant-bubble">${escapeHtml(entry.text)}</div>`;
-            }
-
-            // 附带的工具调用卡片（含 delegate 子 Agent）
-            if (Array.isArray(entry.toolCalls) && entry.toolCalls.length > 0) {
-              for (const call of entry.toolCalls) {
-                renderedToolCallIds.add(String(call.id));
-                const result = toolResultsMap.get(String(call.id));
-                const runningSlot = liveToolsMap.get(String(call.id));
-                assistantHtml += renderToolCardHtml(call.name, call.args, result, view.subagents, runningSlot);
+            if (entry.error) {
+              const errorMsg = entry.error;
+              let count = 1;
+              while (
+                i + 1 < view.entries.length &&
+                view.entries[i + 1].kind === 'assistant' &&
+                view.entries[i + 1].error === errorMsg
+              ) {
+                count++;
+                i++;
               }
-            }
-            assistantHtml += '</div>';
 
-            row.innerHTML = assistantHtml;
-            container.appendChild(row);
+              const row = document.createElement('div');
+              row.className = 'message-row error-system-row';
+              const countBadge = count > 1 ? ` <span class="error-count-badge">×${count}</span>` : '';
+              row.innerHTML = `
+                <div class="error-system-card">
+                  <div class="error-system-main">
+                    <span>模型调用失败：${escapeHtml(errorMsg)}</span>${countBadge}
+                  </div>
+                  <div class="error-system-sub">可以稍后重发，或检查模型服务</div>
+                </div>
+              `;
+              container.appendChild(row);
+            } else {
+              const hasText = !!(entry.text && entry.text.trim());
+              const hasToolCalls = Array.isArray(entry.toolCalls) && entry.toolCalls.length > 0;
+
+              // 没有 text、没有 toolCalls、也没有 error 的 assistant 条目不渲染空气泡
+              if (!hasText && !hasToolCalls) {
+                continue;
+              }
+
+              const row = document.createElement('div');
+              row.className = 'message-row assistant-row';
+
+              let assistantHtml = '<div class="assistant-wrapper">';
+              if (hasText) {
+                assistantHtml += `<div class="assistant-bubble">${escapeHtml(entry.text)}</div>`;
+              }
+
+              // 附带的工具调用卡片（含 delegate 子 Agent）
+              if (hasToolCalls) {
+                for (const call of entry.toolCalls) {
+                  renderedToolCallIds.add(String(call.id));
+                  const result = toolResultsMap.get(String(call.id));
+                  const runningSlot = liveToolsMap.get(String(call.id));
+                  assistantHtml += renderToolCardHtml(call.name, call.args, result, view.subagents, runningSlot);
+                }
+              }
+              assistantHtml += '</div>';
+
+              row.innerHTML = assistantHtml;
+              container.appendChild(row);
+            }
           } else if (entry.kind === 'tool') {
             if (!renderedToolCallIds.has(String(entry.toolCallId))) {
               const row = document.createElement('div');
