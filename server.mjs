@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT as ctx } from "@earendil-works/chord/context";
 import { config, Delegations, Index, Meta, Notes, openAgent, Reminders } from "./lib/agent.mjs";
-import { Schedules, BackgroundJobs, scheduleInTx, manageScheduleInTx, backgroundInTx } from "./lib/v3.mjs";
+import { Schedules, BackgroundJobs, Parents, scheduleInTx, manageScheduleInTx, backgroundInTx } from "./lib/v3.mjs";
 
 const { harness, root, agentModel, modelLabel } = await openAgent(ctx);
 const startedAt = new Date().toISOString();
@@ -127,6 +127,7 @@ async function simplifyView(conversationId, value) {
 	const reminders = (await harness.snapshot(Reminders, conversationId, ctx))?.items ?? [];
 	const subagents = (await harness.snapshot(Delegations, conversationId, ctx))?.items ?? [];
 	const children = (await harness.snapshot(Index, ctx))?.children ?? {};
+	const v3Children = (await harness.snapshot(Parents, ctx))?.children ?? {};
 	// 本会话和它派出的子会话里还活着的任务
 	const mine = new Set([conversationId, ...subagents.map((a) => a.conversationId)]);
 	const tasks = Object.values(taskGraph.value?.tasks ?? {})
@@ -152,7 +153,7 @@ async function simplifyView(conversationId, value) {
 		tasks,
 		reminders: [...reminders].sort((a, b) => a.at - b.at).map(({ id, text, at, status }) => ({ id, text, at, status })),
 		subagents,
-		parentId: children[conversationId] ?? null,
+		parentId: children[conversationId] ?? v3Children[conversationId] ?? null,
 	};
 }
 
