@@ -1,5 +1,5 @@
 /**
- * Cloudflare edition of xiaomoBoy/pi-durable-assistant (minimal demo).
+ * Cloudflare edition of xiaomoBoy/pi-durable-assistant (minimal first release).
  * Real Pi Durable + PiHarness; the only model is Pi AI's scripted faux provider.
  * No API key, Containers, or paid AI model is required.
  */
@@ -45,7 +45,7 @@ export function fauxScript(context) {
       { stopReason: 'toolUse' },
     );
   }
-  return fauxAssistantMessage('演示完成：Pi Durable 已保存任务检查点并继续执行。本次未调用真实 AI 模型。');
+  return fauxAssistantMessage('任务完成：Pi Durable 已保存任务检查点并继续执行。本次未调用真实 AI 模型。');
 }
 
 function extractText(record) {
@@ -71,9 +71,9 @@ export class Assistant extends Agent {
     faux.setResponses(Array(300).fill(fauxScript));
     const registry = createRegistry();
     registry.install(defineExtension({
-      name: 'cloudflare-minimal',
+      name: 'pi-durable-edge',
       tools: [checkpointWait],
-      sections: [{ key: 'preamble', render: () => '这是 Pi Durable 免费模拟演示。先使用 checkpoint_wait 工具，随后给出固定的完成提示。', tag: false }],
+      sections: [{ key: 'preamble', render: () => '这是 Pi Durable Edge 的免费模拟模式。先使用 checkpoint_wait 工具，随后给出固定的完成提示。', tag: false }],
     }));
     this.harness = new PiHarness({
       harness: ({ storage, context }) => {
@@ -88,7 +88,7 @@ export class Assistant extends Agent {
 
   ensureTable() {
     this.ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS demo_reminders (id TEXT PRIMARY KEY, text TEXT NOT NULL, due_at INTEGER NOT NULL, status TEXT NOT NULL, fired_at INTEGER)"
+      "CREATE TABLE IF NOT EXISTS edge_reminders (id TEXT PRIMARY KEY, text TEXT NOT NULL, due_at INTEGER NOT NULL, status TEXT NOT NULL, fired_at INTEGER)"
     );
   }
 
@@ -106,7 +106,7 @@ export class Assistant extends Agent {
       this.harness.pending(),
     ]);
     const reminders = this.ctx.storage.sql.exec(
-      'SELECT id, text, due_at AS dueAt, status, fired_at AS firedAt FROM demo_reminders ORDER BY due_at DESC LIMIT 20'
+      'SELECT id, text, due_at AS dueAt, status, fired_at AS firedAt FROM edge_reminders ORDER BY due_at DESC LIMIT 20'
     ).toArray();
     return { messages: simplifyTranscript(entries), pending, reminders };
   }
@@ -118,13 +118,13 @@ export class Assistant extends Agent {
     const id = crypto.randomUUID();
     const dueAt = Date.now() + seconds * 1000;
     this.ctx.storage.sql.exec(
-      'INSERT INTO demo_reminders (id, text, due_at, status, fired_at) VALUES (?, ?, ?, ?, NULL)',
+      'INSERT INTO edge_reminders (id, text, due_at, status, fired_at) VALUES (?, ?, ?, ?, NULL)',
       id, text.trim(), dueAt, 'scheduled'
     );
     try {
       await this.schedule(seconds, 'fireReminder', { id });
     } catch (error) {
-      this.ctx.storage.sql.exec("UPDATE demo_reminders SET status = 'failed' WHERE id = ?", id);
+      this.ctx.storage.sql.exec("UPDATE edge_reminders SET status = 'failed' WHERE id = ?", id);
       throw error;
     }
     return { id, text: text.trim(), dueAt, status: 'scheduled' };
@@ -134,7 +134,7 @@ export class Assistant extends Agent {
   async fireReminder({ id }) {
     this.ensureTable();
     this.ctx.storage.sql.exec(
-      "UPDATE demo_reminders SET status = 'fired', fired_at = ? WHERE id = ? AND status = 'scheduled'",
+      "UPDATE edge_reminders SET status = 'fired', fired_at = ? WHERE id = ? AND status = 'scheduled'",
       Date.now(), id
     );
   }
@@ -152,8 +152,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    if (!env.DEMO_TOKEN || env.DEMO_TOKEN.length < 24) return json({ error: '尚未配置 DEMO_TOKEN（至少 24 字符）' }, 503);
-    if (!authenticate(request, env.DEMO_TOKEN)) return json({ error: '访问令牌无效' }, 401);
+    if (!env.ACCESS_TOKEN || env.ACCESS_TOKEN.length < 24) return json({ error: '尚未配置 ACCESS_TOKEN（至少 24 字符）' }, 503);
+    if (!authenticate(request, env.ACCESS_TOKEN)) return json({ error: '访问令牌无效' }, 401);
     const agent = env.Assistant.getByName('owner');
     try {
       if (request.method === 'GET' && url.pathname === '/api/state') return json(await agent.snapshot());
@@ -168,7 +168,7 @@ export default {
       return json({ error: 'Not found' }, 404);
     } catch (error) {
       // Avoid leaking internal stack traces or credentials to public clients.
-      console.error('demo api failed', error);
+      console.error('edge api failed', error);
       return json({ error: '请求失败，请查看 Workers 日志并检查输入和配额。' }, 500);
     }
   },
