@@ -1,6 +1,6 @@
 # v3 第一阶段交付与第二阶段规划
 
-> **当前状态：已于 2026-10-10 通过 [PR #1](https://github.com/xiaomoBoy/pi-durable-demo/pull/1) 合并到 `main`**。本文件既是 v3 功能边界说明，也记录回归修复与下一阶段待办。使用方法请先阅读 [README](../README.md)。
+> **当前状态：已于 2026-10-10 通过 [PR #1](https://github.com/xiaomoBoy/pi-durable-assistant/pull/1) 合并到 `main`**。本文件既是 v3 功能边界说明，也记录回归修复与下一阶段待办。使用方法请先阅读 [README](../README.md)。
 
 ## 1. 第一阶段交付范围
 
@@ -76,7 +76,7 @@ NOTIFY_MODE=errors
 
 ## 4. 质量审计和 Bug 修复记录
 
-[PR #1](https://github.com/xiaomoBoy/pi-durable-demo/pull/1) 合并前完成以下修复：
+[PR #1](https://github.com/xiaomoBoy/pi-durable-assistant/pull/1) 合并前完成以下修复：
 
 1. JSON `null`/数组/字符串不再进入业务逻辑导致 500，而是明确 400。
 2. 幂等 requestId 禁止 `__proto__`、`constructor`、`prototype`，对过长键报错，避免原型链属性误判；重试时返回当前状态。

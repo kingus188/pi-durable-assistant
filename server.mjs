@@ -448,7 +448,7 @@ const server = createServer(async (req, res) => {
     }
   }
 	if (!authorized(req)) {
-		res.writeHead(401, { "www-authenticate": 'Basic realm="pi-durable-demo", charset="UTF-8"' });
+		res.writeHead(401, { "www-authenticate": 'Basic realm="pi-durable-assistant", charset="UTF-8"' });
 		return res.end("需要口令");
 	}
 	try {
@@ -467,5 +467,5 @@ if (process.env.NODE_ENV === "production" && !config.password) {
 }
 const bindHost = config.password ? "0.0.0.0" : "127.0.0.1";
 server.listen(config.port, bindHost, () => {
-	console.log(`pi-durable-demo 已启动：端口 ${config.port}，模型 ${modelLabel}，PID ${process.pid}`);
+	console.log(`pi-durable-assistant 已启动：端口 ${config.port}，模型 ${modelLabel}，PID ${process.pid}`);
 });

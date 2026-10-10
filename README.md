@@ -28,7 +28,7 @@
 
 - 部署和扫码步骤：[微信接入手册](docs/WECHAT.md)。
 - 配置 `.env` 中的 `WECHAT_ENABLED=1`、`WECHAT_WEBHOOK_KEY`、`WECHAT_SEND_TOKEN`（两个不同的随机密钥）。
-- `docker compose --profile wechat build`，先 `docker compose up -d pi-durable-demo`，再 `docker compose --profile wechat run --rm wx-bot --config /etc/wx-bot/config.json login primary`，最后 `docker compose --profile wechat up -d`。
+- `docker compose --profile wechat build`，先 `docker compose up -d pi-durable-assistant`，再 `docker compose --profile wechat run --rm wx-bot --config /etc/wx-bot/config.json login primary`，最后 `docker compose --profile wechat up -d`。
 - 微信消息走独立的 Bearer Auth Webhook，原有管理界面仍使用 Basic Auth。通过 `GET /api/wechat/status` 查看通道状态。
 - 当前只保证文本和语音转写文本链路；媒体附件仅占位提示，不做虚假的“已读取”分析。iLink 消息策略/限流和扫码能否成功需用真实微信验证。发出成功、标记已发送之前发生崩溃可能重复投递。
 

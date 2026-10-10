@@ -1,8 +1,8 @@
 {
-  "name": "pi-durable-demo",
+  "name": "pi-durable-assistant",
   "version": "0.1.0",
   "private": true,
-  "description": "一个网页版个人 Agent，演示 Pi Durable 的断点恢复、Document、后台任务、子 Agent、Fork 和多端同步",
+  "description": "基于 Pi Durable 的网页版个人 Agent：断点恢复、记事本、子 Agent、定时计划、任务中心和微信通道",
   "type": "module",
   "engines": {
     "node": ">=22.13"

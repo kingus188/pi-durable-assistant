@@ -210,7 +210,7 @@ SSE 要发心跳注释（每 15 秒 `: ping`），连接关闭时 `unsubscribe` 
 
 - `scripts/dev.sh`：循环运行 `node server.mjs`，进程退出后 1 秒重启（模拟 Docker 的 restart），Ctrl+C 能整体退出。
 - `Dockerfile`：`node:22-slim`，`npm ci --omit=dev`，非 root 用户运行，`DATA_DIR=/data`，`EXPOSE 3000`。
-- `compose.yaml`：服务名 `pi-durable-demo`，`restart: unless-stopped`，`env_file: .env`，数据卷 `pi-durable-demo-data:/data`，`ports: ["127.0.0.1:${HOST_PORT:-3300}:3000"]`，`mem_limit: 1g`，`cpus: 1.0`，`read_only: true` 配 `tmpfs: /tmp`，`security_opt: ["no-new-privileges:true"]`，并加入外部网络 `${SUB2API_NETWORK}`（用来访问 sub2api 容器）以及自己的默认网络。
+- `compose.yaml`：服务名 `pi-durable-assistant`，`restart: unless-stopped`，`env_file: .env`，数据卷 `pi-durable-assistant-data:/data`，`ports: ["127.0.0.1:${HOST_PORT:-3300}:3000"]`，`mem_limit: 1g`，`cpus: 1.0`，`read_only: true` 配 `tmpfs: /tmp`，`security_opt: ["no-new-privileges:true"]`，并加入外部网络 `${SUB2API_NETWORK}`（用来访问 sub2api 容器）以及自己的默认网络。
 - `.env.example`：列出所有变量，值留空或示例，**不放真实 Key**。
 
 ---

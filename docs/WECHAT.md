@@ -4,7 +4,7 @@
 
 ## 架构
 
-本仓库管理两个独立容器：Node.js Pi Durable（网页、会话、Durable Runtime、任务）和 Go wx-bot（微信扫码、轮询、媒体协议）。两个容器使用 `network_mode: service:pi-durable-demo` 共用网络命名空间，仅通过 `127.0.0.1` 内部 HTTP 访问，**不对公网开放 wx-bot 的 18790 端口**。
+本仓库管理两个独立容器：Node.js Pi Durable（网页、会话、Durable Runtime、任务）和 Go wx-bot（微信扫码、轮询、媒体协议）。两个容器使用 `network_mode: service:pi-durable-assistant` 共用网络命名空间，仅通过 `127.0.0.1` 内部 HTTP 访问，**不对公网开放 wx-bot 的 18790 端口**。
 
 `wx-bot` 来自 [lawrencewzen/wx-bot](https://github.com/lawrencewzen/wx-bot) 的固定提交 `57ed5f56eedce782e378483f762c7565c45ade5d`。Docker 构建时执行 `deploy/wechat/patch_upstream.py`，修复“先推进游标、后投递 Webhook”导致的漏消息，并参考 [腾讯官方协议](https://github.com/Tencent/openclaw-weixin/blob/main/docs/protocol_zh_CN.md) 更新二维码为 POST。若上游变更导致补丁不匹配，构建会失败而非静默忽略。其余 iLink 协议细节仍由 wx-bot 维护。
 
@@ -29,7 +29,7 @@ openssl rand -hex 32
 # 首次构建双服务，必须有 Go 官方依赖源与 GitHub 出站网络
 docker compose --profile wechat build
 # 先启动主服务
-docker compose up -d pi-durable-demo
+docker compose up -d pi-durable-assistant
 # 前台扫码，最好在 SSH 终端或带二维码的交互终端执行
 docker compose --profile wechat run --rm wx-bot --config /etc/wx-bot/config.json login primary
 # 之后常驻启动
@@ -37,7 +37,7 @@ docker compose --profile wechat up -d
 docker compose --profile wechat logs -f wx-bot
 ```
 
-用扫码微信给 **ClawBot 会话** 发送一条文本。Pi Durable 会创建“微信：primary”会话并自动发回最终回答。网页与微信共用同一 Durable Runtime。扫码后 `bot_token`、消息游标、`context_token` 保存在 `wx-bot-state` Docker 持久卷；Agent SQLite 保存在 `pi-durable-demo-data`。切勿 `docker compose down -v`。
+用扫码微信给 **ClawBot 会话** 发送一条文本。Pi Durable 会创建“微信：primary”会话并自动发回最终回答。网页与微信共用同一 Durable Runtime。扫码后 `bot_token`、消息游标、`context_token` 保存在 `wx-bot-state` Docker 持久卷；Agent SQLite 保存在 `pi-durable-assistant-data`。切勿 `docker compose down -v`。
 
 ## 3. 查看状态与排障
 
