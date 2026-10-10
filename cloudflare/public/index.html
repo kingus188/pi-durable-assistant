@@ -26,8 +26,9 @@
     <p>构建在 Cloudflare 上的持久化 Pi Agent。当前初始版本使用 faux 模型，无付费 Token；聊天任务和定时提醒由 Durable Objects 保存。</p>
     <section class="panel">
       <h2>访问令牌</h2>
-      <div class="controls"><input id="token" type="password" placeholder="部署时配置的 ACCESS_TOKEN" autocomplete="off"><button id="connect" class="primary">连接</button></div>
+      <div class="controls"><input id="token" type="password" placeholder="部署时配置的 ACCESS_TOKEN" autocomplete="off"><button id="connect" class="primary">连接</button><button id="selfcheck" disabled>一键功能自检</button></div>
       <div id="feedback" aria-live="polite">首次使用请填写在 Cloudflare 侧设置的 ACCESS_TOKEN。</div>
+      <div class="muted" id="selfcheck-result" aria-live="polite">连接后可以一键验证对话、幂等提交、持久化和提醒触发（不包含模拟崩溃）。</div>
     </section>
     <section class="panel">
       <h2>① 模拟对话 / 持久化任务</h2>
