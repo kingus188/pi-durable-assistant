@@ -73,6 +73,12 @@ test("创建、管理、持久化和导出接口（无需 API Key）", { timeout
     const management = await (await fetch(app.origin + prefix + "/management")).json();
     assert.equal(management.schedules.length, 1);
     assert.equal(management.schedules[0].status, "cancelled");
+    const bg = await post(app.origin, prefix + "/background", {
+      text: "执行一项可取消的任务", requestId: "test-stop-background",
+    });
+    await post(app.origin, prefix + "/background/" + bg.item.id + "/stop");
+    const afterStop = await (await fetch(app.origin + prefix + "/management")).json();
+    assert.equal(afterStop.background.find((x) => x.id === bg.item.id).status, "cancelled");
     const exported = await fetch(app.origin + prefix + "/export.md");
     assert.equal(exported.status, 200);
     assert.match(await exported.text(), /Pi Durable 会话/);
