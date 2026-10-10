@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Pi Durable Demo</title>
+  <style>
+    /* CSS 变量定义：支持明暗双色模式 */
+    :root {
+      --bg-page: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f1f5f9;
+      --bg-input: #ffffff;
+      --border: #e2e8f0;
+      --border-focus: #3b82f6;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --text-light: #94a3b8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --user-bubble: #2563eb;
+      --user-text: #ffffff;
+      --assistant-bubble: #ffffff;
+      --assistant-text: #0f172a;
+      --tool-bg: #f8fafc;
+      --tool-border: #cbd5e1;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --danger-bg: #fef2f2;
+      --warning-bg: #fef3c7;
+      --warning-text: #92400e;
+      --warning-border: #fcd34d;
+      --success: #10b981;
+      --success-bg: #ecfdf5;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-page: #0b0f19;
+        --bg-surface: #111827;
+        --bg-subtle: #1e293b;
+        --bg-input: #1a2234;
+        --border: #2e3a50;
+        --border-focus: #60a5fa;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --text-light: #64748b;
+        --primary: #3b82f6;
+        --primary-hover: #60a5fa;
+        --primary-light: #1e3a8a33;
+        --user-bubble: #2563eb;
+        --user-text: #ffffff;
+        --assistant-bubble: #162032;
+        --assistant-text: #f8fafc;
+        --tool-bg: #111a2e;
+        --tool-border: #293854;
+        --danger: #ef4444;
+        --danger-hover: #f87171;
+        --danger-bg: #450a0a;
+        --warning-bg: #78350f;
+        --warning-text: #fef3c7;
+        --warning-border: #b45309;
+        --success: #10b981;
+        --success-bg: #064e3b;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    /* 基础重置 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, textarea {
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    /* 顶部重连断线横条 */
+    .reconnect-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background-color: var(--warning-bg);
+      color: var(--warning-text);
+      border-bottom: 1px solid var(--warning-border);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13.5px;
+      font-weight: 500;
+      z-index: 10000;
+      box-shadow: var(--shadow-sm);
+    }
+    .reconnect-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 主布局容器：三栏 */
+    .app-layout {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      padding-top: 0;
+    }
+
+    /* 移动端顶部标题导航条（桌面端隐藏） */
+    .mobile-header {
+      display: none;
+    }
+
+    /* 左栏：会话列表 */
+    .sidebar-left {
+      width: 260px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      height: 100%;
+      z-index: 100;
+    }
+    .sidebar-left-header {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .btn-new-conv {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      background-color: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background-color 0.15s ease;
+    }
+    .btn-new-conv:hover {
+      background-color: var(--primary-hover);
+    }
+    .conversation-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .conversation-item {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: background-color 0.15s ease;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .conversation-item:hover {
+      background-color: var(--bg-subtle);
+    }
+    .conversation-item.active {
+      background-color: var(--primary-light);
+      border-color: var(--border-focus);
+    }
+    .conv-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .conv-fork-icon {
+      color: var(--primary);
+      font-weight: bold;
+    }
+    .conv-time {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* 中栏：消息流和输入区 */
+    .chat-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-width: 0;
+      background-color: var(--bg-page);
+      position: relative;
+    }
+    .chat-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background-color: var(--bg-surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chat-header-title {
+      font-size: 15px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chat-header-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 消息条目 */
+    .message-row {
+      display: flex;
+      width: 100%;
+      position: relative;
+    }
+    .user-row {
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+    }
+    .fork-btn {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, background-color 0.15s ease;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .user-row:hover .fork-btn {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .fork-btn:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .user-bubble {
+      background-color: var(--user-bubble);
+      color: var(--user-text);
+      padding: 10px 15px;
+      border-radius: var(--radius-md) var(--radius-md) 2px var(--radius-md);
+      max-width: 80%;
+      line-height: 1.55;
+      font-size: 14.5px;
+      word-break: break-word;
+      white-space: pre-wrap;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .assistant-row {
+      justify-content: flex-start;
+      max-width: 88%;
+    }
+    .assistant-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+    .assistant-bubble {
+      background-color: var(--assistant-bubble);
+      color: var(--assistant-text);
+      padding: 12px 16px;
+      border-radius: var(--radius-md) var(--radius-md) var(--radius-md) 2px;
+      border: 1px solid var(--border);
+      line-height: 1.6;
+      font-size: 14.5px;
+      word-break: break-word;
+      white-space: pre-wrap;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* 工具卡片 */
+    .tool-card {
+      background-color: var(--tool-bg);
+      border: 1px solid var(--tool-border);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      margin-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13.5px;
+      box-shadow: var(--shadow-sm);
+    }
+    .tool-card.error {
+      border-color: var(--danger);
+      background-color: var(--danger-bg);
+    }
+    .tool-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+    .tool-name-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--primary);
+    }
+    .tool-badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background-color: var(--bg-subtle);
+      color: var(--text-muted);
+    }
+    .tool-badge.done {
+      background-color: var(--success-bg);
+      color: var(--success);
+    }
+    .tool-badge.running {
+      background-color: var(--primary-light);
+      color: var(--primary);
+    }
+    .tool-badge.error {
+      background-color: var(--danger-bg);
+      color: var(--danger);
+    }
+    .tool-args-box {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      background-color: var(--bg-subtle);
+      padding: 5px 8px;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+    .tool-result-box {
+      margin-top: 4px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border);
+      color: var(--text-main);
+      line-height: 1.5;
+    }
+    .tool-result-content {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .tool-expand-btn {
+      margin-top: 4px;
+      background: none;
+      border: none;
+      color: var(--primary);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 0;
+      text-decoration: underline;
+    }
+
+    /* 流式生成与思考中 */
+    .live-bubble {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 10px 14px;
+      background-color: var(--assistant-bubble);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-md);
+    }
+    .cursor-blink {
+      display: inline-block;
+      width: 7px;
+      height: 15px;
+      background-color: var(--primary);
+      vertical-align: middle;
+      margin-left: 2px;
+      animation: blink 0.9s infinite;
+    }
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+    .thinking-dots span {
+      animation: dotPulse 1.4s infinite;
+      display: inline-block;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotPulse {
+      0%, 20% { transform: translateY(0); opacity: 0.4; }
+      50% { transform: translateY(-3px); opacity: 1; }
+      80%, 100% { transform: translateY(0); opacity: 0.4; }
+    }
+
+    /* 底部输入框区 */
+    .input-container {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      background-color: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .input-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .controls-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .steer-label {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      color: var(--primary);
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+    }
+    .btn-abort {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border: 1px solid var(--danger);
+      background-color: var(--danger-bg);
+      color: var(--danger);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+    .btn-abort:hover {
+      background-color: var(--danger);
+      color: #ffffff;
+    }
+    .inbox-badge {
+      display: none;
+      background-color: var(--bg-subtle);
+      color: var(--text-muted);
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+
+    .input-box-wrapper {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .chat-textarea {
+      flex: 1;
+      min-height: 44px;
+      max-height: 140px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background-color: var(--bg-input);
+      color: var(--text-main);
+      resize: none;
+      line-height: 1.5;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .chat-textarea:focus {
+      border-color: var(--border-focus);
+    }
+    .btn-send {
+      padding: 10px 18px;
+      height: 44px;
+      background-color: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: background-color 0.15s ease;
+    }
+    .btn-send:hover {
+      background-color: var(--primary-hover);
+    }
+    .btn-send:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* 右栏：记事本、运行状态与崩溃按钮 */
+    .sidebar-right {
+      width: 310px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background-color: var(--bg-surface);
+      border-left: 1px solid var(--border);
+      height: 100%;
+      overflow-y: auto;
+      padding: 18px;
+    }
+
+    .card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-main);
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* 记事本 */
+    .notes-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .notes-subtitle {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .todo-list, .memo-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .todo-item input[type="checkbox"] {
+      margin-top: 2px;
+      cursor: default;
+    }
+    .todo-item.done span {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+    .memo-item {
+      font-size: 13px;
+      padding: 4px 8px;
+      background-color: var(--bg-subtle);
+      border-radius: 4px;
+      word-break: break-all;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .empty-placeholder {
+      font-size: 12.5px;
+      color: var(--text-light);
+      font-style: italic;
+    }
+
+    /* 运行状态 */
+    .stat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .stat-label {
+      color: var(--text-muted);
+    }
+    .stat-value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 600;
+    }
+    .boots-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      background-color: var(--primary-light);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+    .boots-updated {
+      animation: badgeBounce 1.2s ease-in-out;
+    }
+    @keyframes badgeBounce {
+      0%, 100% { transform: scale(1); background-color: var(--primary-light); }
+      50% { transform: scale(1.15); background-color: var(--success-bg); color: var(--success); }
+    }
+
+    /* 红色崩溃按钮 */
+    .btn-crash {
+      width: 100%;
+      padding: 10px;
+      background-color: var(--danger-bg);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-crash:hover {
+      background-color: var(--danger);
+      color: #ffffff;
+    }
+
+    /* 二次确认模态框 */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 11000;
+      padding: 16px;
+    }
+    .modal-card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 420px;
+      padding: 22px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--danger);
+    }
+    .modal-body {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text-main);
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .btn-modal-cancel {
+      padding: 8px 16px;
+      background-color: var(--bg-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-modal-confirm {
+      padding: 8px 16px;
+      background-color: var(--danger);
+      border: 1px solid var(--danger);
+      color: #ffffff;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-modal-confirm:hover {
+      background-color: var(--danger-hover);
+    }
+
+    /* 抽屉遮罩 */
+    .drawer-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.4);
+      z-index: 99;
+    }
+
+    /* 移动端响应式适配（单栏） */
+    @media (max-width: 820px) {
+      .app-layout {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        width: 100%;
+        overflow-x: hidden;
+      }
+
+      /* 移动端顶部条 */
+      .mobile-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        height: 52px;
+        background-color: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+      }
+      .mobile-menu-btn {
+        background: none;
+        border: none;
+        font-size: 20px;
+        color: var(--text-main);
+        cursor: pointer;
+        padding: 6px;
+      }
+      .mobile-header-title {
+        font-size: 15px;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 50%;
+      }
+      .mobile-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .mobile-jump-notes {
+        background: none;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 4px 8px;
+        font-size: 12px;
+        color: var(--text-muted);
+        cursor: pointer;
+      }
+
+      /* 左栏变为抽屉式侧边栏 */
+      .sidebar-left {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        max-width: 85vw;
+        height: 100%;
+        transform: translateX(-100%);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-lg);
+      }
+      .sidebar-left.open {
+        transform: translateX(0);
+      }
+      .drawer-backdrop.open {
+        display: block;
+      }
+
+      /* 中栏桌面端标题隐藏 */
+      .chat-header {
+        display: none;
+      }
+
+      .chat-column {
+        flex: none;
+        width: 100%;
+        height: auto;
+      }
+      .messages-container {
+        padding: 16px;
+        min-height: 320px;
+        max-height: 58vh;
+        overflow-y: auto;
+      }
+      .input-container {
+        padding: 14px 16px;
+        position: sticky;
+        bottom: 0;
+        z-index: 40;
+      }
+
+      /* 移动端分叉按钮在用户气泡下方常驻，易于点击 */
+      .user-row {
+        flex-direction: column;
+        align-items: flex-end;
+      }
+      .fork-btn {
+        opacity: 0.85;
+        pointer-events: auto;
+        font-size: 11px;
+        padding: 2px 6px;
+        margin-top: 4px;
+      }
+
+      /* 右栏排在对话下方 */
+      .sidebar-right {
+        width: 100%;
+        height: auto;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        padding: 16px;
+        overflow-y: visible;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 断线重连顶部横条 -->
+  <div id="reconnect-banner" class="reconnect-banner">
+    <div class="reconnect-spinner"></div>
+    <span>与服务器断开，正在重连…</span>
+  </div>
+
+  <!-- 移动端抽屉遮罩 -->
+  <div id="drawer-backdrop" class="drawer-backdrop" onclick="closeSidebarDrawer()"></div>
+
+  <!-- 移动端顶部标题栏 -->
+  <header class="mobile-header">
+    <button class="mobile-menu-btn" onclick="openSidebarDrawer()" aria-label="打开会话列表">☰</button>
+    <div class="mobile-header-title" id="mobile-current-title">新对话</div>
+    <div class="mobile-actions">
+      <button class="mobile-jump-notes" onclick="scrollToNotes()">📋 记事本</button>
+      <button class="btn-new-conv" onclick="createNewConversation()">＋ 新建</button>
+    </div>
+  </header>
+
+  <!-- 主布局 -->
+  <div class="app-layout">
+
+    <!-- 左栏：会话列表 -->
+    <aside class="sidebar-left" id="sidebar-left">
+      <div class="sidebar-left-header">
+        <span class="brand-title">Pi Durable</span>
+        <button class="btn-new-conv" onclick="createNewConversation()">＋ 新对话</button>
+      </div>
+      <nav class="conversation-list" id="conversation-list" aria-label="会话列表">
+        <!-- 动态渲染 -->
+      </nav>
+    </aside>
+
+    <!-- 中栏：消息流与输入 -->
+    <main class="chat-column">
+      <header class="chat-header">
+        <h2 class="chat-header-title" id="desktop-current-title">新对话</h2>
+        <span class="chat-header-meta" id="desktop-current-meta"></span>
+      </header>
+
+      <!-- 消息流容器 -->
+      <section class="messages-container" id="messages-container" aria-live="polite">
+        <!-- 动态渲染 -->
+      </section>
+
+      <!-- 底部输入区 -->
+      <footer class="input-container">
+        <div class="input-controls">
+          <div class="controls-left">
+            <label class="steer-label" id="steer-toggle">
+              <input type="checkbox" id="steer-checkbox">
+              <span>插话（steer）</span>
+            </label>
+            <button class="btn-abort" id="btn-abort" onclick="abortCurrentTask()">⏹ 停止</button>
+          </div>
+          <span class="inbox-badge" id="inbox-badge">排队中：0 条</span>
+        </div>
+
+        <div class="input-box-wrapper">
+          <textarea
+            class="chat-textarea"
+            id="chat-textarea"
+            placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"
+            rows="1"
+          ></textarea>
+          <button class="btn-send" id="btn-send" onclick="submitMessage()">发送</button>
+        </div>
+      </footer>
+    </main>
+
+    <!-- 右栏：记事本、运行状态与崩溃测试 -->
+    <aside class="sidebar-right" id="sidebar-right">
+
+      <!-- 记事本卡片 -->
+      <section class="card" id="notes-card">
+        <div class="card-title">📝 记事本</div>
+        <div class="notes-section">
+          <div class="notes-subtitle">待办事项</div>
+          <div class="todo-list" id="todo-list">
+            <span class="empty-placeholder">暂无待办事项</span>
+          </div>
+        </div>
+        <div class="notes-section">
+          <div class="notes-subtitle">备忘录</div>
+          <div class="memo-list" id="memo-list">
+            <span class="empty-placeholder">暂无备忘录</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 运行状态卡片 -->
+      <section class="card" id="status-card">
+        <div class="card-title">⚡ 运行状态</div>
+        <div class="stat-list">
+          <div class="stat-row">
+            <span class="stat-label">启动次数</span>
+            <span class="boots-badge" id="stat-boots">第 1 次启动</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">进程 PID</span>
+            <span class="stat-value" id="stat-pid">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">启动时间</span>
+            <span class="stat-value" id="stat-started-at" style="font-size: 11.5px;">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">模型</span>
+            <span class="stat-value" id="stat-model" style="font-size: 12px;">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">会话 Token</span>
+            <span class="stat-value" id="stat-tokens">-</span>
+          </div>
+        </div>
+
+        <!-- 模拟崩溃按钮 -->
+        <button class="btn-crash" onclick="openCrashModal()">
+          💥 模拟进程崩溃
+        </button>
+      </section>
+
+    </aside>
+
+  </div>
+
+  <!-- 模拟崩溃二次确认弹窗 -->
+  <div class="modal-overlay" id="crash-modal" onclick="onModalBackdropClick(event)">
+    <div class="modal-card">
+      <div class="modal-header">
+        ⚠️ 确认模拟进程崩溃？
+      </div>
+      <div class="modal-body">
+        <p>将向服务器发送 <code>POST /api/crash</code> 请求，服务器将在 200ms 后强制退出进程（<code>process.exit(1)</code>）。</p>
+        <br>
+        <p>随后由后台守护脚本自动重启进程。网页将显示断线重连横条，并在恢复后显示启动次数 +1，同时自动恢复未完成的任务。</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closeCrashModal()">取消</button>
+        <button class="btn-modal-confirm" id="btn-modal-confirm" onclick="confirmCrash()">确认崩溃</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 状态管理 ---
+    let currentConversationId = null;
+    let conversations = [];
+    let currentEventSource = null;
+    let currentViewData = null;
+    let serverInfo = null;
+    let previousBoots = null;
+    let isComposing = false;
+    let autoScrollChat = true;
+
+    // --- 工具函数 ---
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function generateUuid() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return 'req-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function formatTime(timestamp) {
+      if (!timestamp) return '-';
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return String(timestamp);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function formatShortTime(timestamp) {
+      if (!timestamp) return '';
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function formatToolArgs(args) {
+      if (!args) return '(无参数)';
+      if (typeof args === 'string') return args;
+      if (typeof args !== 'object') return String(args);
+      const entries = Object.entries(args);
+      if (entries.length === 0) return '(无参数)';
+      return entries
+        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+        .join(' · ');
+    }
+
+    function formatUsageTokens(usage) {
+      if (!usage) return '0';
+      // pi.usage 按 provider/model 分组：{ models: { "demo/xxx": { input, output, totalTokens } } }，先加总
+      if (usage.models) {
+        const all = Object.values(usage.models);
+        usage = {
+          input: all.reduce((n, u) => n + (u.input || 0), 0),
+          output: all.reduce((n, u) => n + (u.output || 0), 0),
+        };
+      }
+      const input = usage.input || usage.inputTokens || 0;
+      const output = usage.output || usage.outputTokens || 0;
+      const total = usage.totalTokens || (input + output);
+      if (input || output) {
+        return `入 ${input} · 出 ${output}`;
+      }
+      return `${total}`;
+    }
+
+    // --- 断线重连横条控制 ---
+    const reconnectBanner = document.getElementById('reconnect-banner');
+    function showReconnectBanner() {
+      reconnectBanner.style.display = 'flex';
+    }
+    function hideReconnectBanner() {
+      reconnectBanner.style.display = 'none';
+    }
+
+    // --- API 调用 ---
+    async function fetchServerInfo() {
+      try {
+        const res = await fetch('/api/info');
+        if (!res.ok) throw new Error('拉取服务信息失败');
+        const data = await res.json();
+        updateServerInfo(data);
+      } catch (err) {
+        console.warn('拉取 /api/info 失败:', err);
+      }
+    }
+
+    function updateServerInfo(info) {
+      serverInfo = info;
+      const pidEl = document.getElementById('stat-pid');
+      const timeEl = document.getElementById('stat-started-at');
+      const bootsEl = document.getElementById('stat-boots');
+      const modelEl = document.getElementById('stat-model');
+
+      if (pidEl) pidEl.textContent = info.pid || '-';
+      if (timeEl) timeEl.textContent = formatTime(info.startedAt);
+      if (modelEl) modelEl.textContent = info.model || info.api || '-';
+
+      if (bootsEl && info.boots !== undefined) {
+        bootsEl.textContent = `第 ${info.boots} 次启动`;
+        // 若启动次数变大，添加高亮跳动动画，直观展现重启
+        if (previousBoots !== null && info.boots > previousBoots) {
+          bootsEl.classList.remove('boots-updated');
+          void bootsEl.offsetWidth; // 触发 reflow
+          bootsEl.classList.add('boots-updated');
+        }
+        previousBoots = info.boots;
+      }
+    }
+
+    async function fetchConversations() {
+      try {
+        const res = await fetch('/api/conversations');
+        if (!res.ok) throw new Error('拉取会话列表失败');
+        conversations = await res.json();
+        renderConversationList();
+
+        // 根据 URL Hash 决定选中的会话
+        const hashId = parseHashConversationId();
+        if (hashId !== null) {
+          const exists = conversations.some(c => String(c.id) === String(hashId));
+          if (exists) {
+            if (String(currentConversationId) !== String(hashId)) {
+              selectConversation(hashId);
+            }
+            return;
+          }
+        }
+
+        // 若 Hash 无效或不存在，选中第一个会话；若列表为空则新建
+        if (conversations.length > 0) {
+          selectConversation(conversations[0].id);
+        } else {
+          await createNewConversation();
+        }
+      } catch (err) {
+        console.error('拉取会话列表出错:', err);
+      }
+    }
+
+    function parseHashConversationId() {
+      const hash = window.location.hash.replace(/^#/, '').trim();
+      if (!hash) return null;
+      return hash;
+    }
+
+    async function createNewConversation() {
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!res.ok) throw new Error('新建会话失败');
+        const data = await res.json();
+        closeSidebarDrawer();
+        selectConversation(data.id);
+        await fetchConversations();
+      } catch (err) {
+        alert('新建会话失败：' + err.message);
+      }
+    }
+
+    function selectConversation(id) {
+      if (String(currentConversationId) === String(id) && currentEventSource) {
+        return;
+      }
+      currentConversationId = id;
+      window.location.hash = '#' + id;
+      renderConversationList();
+      updateConversationHeaders();
+      connectSse(id);
+    }
+
+    function updateConversationHeaders() {
+      const current = conversations.find(c => String(c.id) === String(currentConversationId));
+      const title = current ? (current.forkOf ? `⑂ ${current.title}` : current.title) : '新对话';
+      const desktopTitleEl = document.getElementById('desktop-current-title');
+      const mobileTitleEl = document.getElementById('mobile-current-title');
+      const desktopMetaEl = document.getElementById('desktop-current-meta');
+
+      if (desktopTitleEl) desktopTitleEl.textContent = title;
+      if (mobileTitleEl) mobileTitleEl.textContent = title;
+      if (desktopMetaEl && current && current.createdAt) {
+        desktopMetaEl.textContent = formatTime(current.createdAt);
+      }
+    }
+
+    function renderConversationList() {
+      const listEl = document.getElementById('conversation-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+
+      conversations.forEach(c => {
+        const item = document.createElement('div');
+        const isActive = String(c.id) === String(currentConversationId);
+        item.className = 'conversation-item' + (isActive ? ' active' : '');
+        item.onclick = () => {
+          selectConversation(c.id);
+          closeSidebarDrawer();
+        };
+
+        const isFork = !!c.forkOf || (c.title && c.title.startsWith('分叉'));
+        item.innerHTML = `
+          <div class="conv-title-row">
+            ${isFork ? '<span class="conv-fork-icon">⑂</span>' : ''}
+            <span>${escapeHtml(c.title || '新对话')}</span>
+          </div>
+          <div class="conv-time">${escapeHtml(formatShortTime(c.createdAt))}</div>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+
+    // --- SSE 连接与数据渲染 ---
+    function connectSse(conversationId) {
+      if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
+      }
+
+      const url = `/api/conversations/${encodeURIComponent(conversationId)}/events`;
+      const es = new EventSource(url);
+      currentEventSource = es;
+
+      es.onopen = () => {
+        hideReconnectBanner();
+        // 重连成功后重新拉取 info，以捕捉崩溃恢复后的 boots 变化
+        fetchServerInfo();
+        fetchConversations();
+      };
+
+      es.onerror = (err) => {
+        showReconnectBanner();
+      };
+
+      es.addEventListener('view', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          currentViewData = data;
+          renderView(data);
+        } catch (err) {
+          console.error('解析 SSE view 数据失败:', err);
+        }
+      });
+    }
+
+    // 解析 pi.live 流式状态
+    function extractLiveInfo(live) {
+      if (!live) return null;
+      // 按 SPEC 要求：在控制台打印一次结构方便调试
+      if (!window.__liveLogged && Object.keys(live).length) { window.__liveLogged = true; console.log('pi.live 实时结构:', live); }
+
+      let text = '';
+      let thinking = '';
+      const runningTools = [];
+
+      // 1. generation 中的 committed throttled partial 消息
+      if (live.generation && live.generation.message) {
+        const msg = live.generation.message;
+        const contents = Array.isArray(msg.content) ? msg.content : (typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : []);
+        for (const item of contents) {
+          if (typeof item === 'string') {
+            text += item;
+          } else if (item && typeof item === 'object') {
+            if (item.type === 'text' && item.text) {
+              text += item.text;
+            } else if (item.type === 'thinking' && item.thinking) {
+              thinking += item.thinking;
+            } else if (item.type === 'toolCall') {
+              runningTools.push({
+                name: item.name || '工具调用',
+                args: item.arguments || item.args,
+                status: 'running'
+              });
+            }
+          }
+        }
+      }
+
+      // 2. 备用直接字段
+      if (!text && typeof live.text === 'string') text = live.text;
+      if (!text && typeof live.generation?.text === 'string') text = live.generation.text;
+      if (!text && typeof live.stream === 'string') text = live.stream;
+
+      // 3. live.tools 运行中的工具槽位
+      if (Array.isArray(live.tools)) {
+        for (const slot of live.tools) {
+          runningTools.push({
+            name: slot.name || '工具',
+            callId: slot.callId,
+            status: slot.status || 'running',
+            output: slot.output || '',
+            details: slot.details
+          });
+        }
+      }
+
+      return {
+        text: text.trim(),
+        thinking: thinking.trim(),
+        runningTools
+      };
+    }
+
+    function renderView(view) {
+      const container = document.getElementById('messages-container');
+      if (!container) return;
+
+      // 保存滚动状态
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+
+      container.innerHTML = '';
+
+      // 建立工具执行结果映射
+      const toolResultsMap = new Map();
+      if (Array.isArray(view.entries)) {
+        for (const entry of view.entries) {
+          if (entry.kind === 'tool' && entry.toolCallId) {
+            toolResultsMap.set(entry.toolCallId, entry);
+          }
+        }
+      }
+
+      const renderedToolCallIds = new Set();
+
+      // 渲染历史 Entry
+      if (Array.isArray(view.entries)) {
+        for (const entry of view.entries) {
+          if (entry.kind === 'user') {
+            const row = document.createElement('div');
+            row.className = 'message-row user-row';
+            row.innerHTML = `
+              <button class="fork-btn" title="从这里分叉" onclick="forkConversation('${escapeHtml(entry.id)}')">
+                <span>⑂ 从这里分叉</span>
+              </button>
+              <div class="user-bubble">${escapeHtml(entry.text || '')}</div>
+            `;
+            container.appendChild(row);
+          } else if (entry.kind === 'assistant') {
+            const row = document.createElement('div');
+            row.className = 'message-row assistant-row';
+
+            let assistantHtml = '<div class="assistant-wrapper">';
+            if (entry.text) {
+              assistantHtml += `<div class="assistant-bubble">${escapeHtml(entry.text)}</div>`;
+            }
+
+            // 附带的工具调用卡片
+            if (Array.isArray(entry.toolCalls) && entry.toolCalls.length > 0) {
+              for (const call of entry.toolCalls) {
+                renderedToolCallIds.add(call.id);
+                const result = toolResultsMap.get(call.id);
+                assistantHtml += renderToolCardHtml(call.name, call.args, result);
+              }
+            }
+            assistantHtml += '</div>';
+
+            row.innerHTML = assistantHtml;
+            container.appendChild(row);
+          } else if (entry.kind === 'tool') {
+            // 如果工具结果尚未在 assistant 的 toolCalls 里渲染过，则独立渲染
+            if (!renderedToolCallIds.has(entry.toolCallId)) {
+              const row = document.createElement('div');
+              row.className = 'message-row assistant-row';
+              row.innerHTML = `
+                <div class="assistant-wrapper">
+                  ${renderToolCardHtml(entry.name || '工具调用', null, entry)}
+                </div>
+              `;
+              container.appendChild(row);
+            }
+          }
+        }
+      }
+
+      // 运行中状态（busy / live）
+      const isBusy = !!view.busy || (view.live && Object.keys(view.live).length > 0);
+      updateBusyControls(isBusy, view.inbox || 0);
+
+      if (isBusy) {
+        const liveInfo = extractLiveInfo(view.live);
+        const liveRow = document.createElement('div');
+        liveRow.className = 'message-row assistant-row';
+
+        let liveInner = '<div class="assistant-wrapper">';
+
+        if (liveInfo && liveInfo.text) {
+          // 显示流式输出文字 + 闪烁光标
+          liveInner += `
+            <div class="assistant-bubble">
+              ${escapeHtml(liveInfo.text)}<span class="cursor-blink"></span>
+            </div>
+          `;
+        } else if (liveInfo && liveInfo.thinking) {
+          liveInner += `
+            <div class="live-bubble">
+              💭 正在思考：${escapeHtml(liveInfo.thinking)}<span class="cursor-blink"></span>
+            </div>
+          `;
+        } else {
+          // 尽力显示：找不到文字时显示“正在思考…”
+          liveInner += `
+            <div class="live-bubble">
+              <span class="thinking-dots">正在思考<span>.</span><span>.</span><span>.</span></span>
+            </div>
+          `;
+        }
+
+        // 渲染正在运行中的工具卡片
+        if (liveInfo && liveInfo.runningTools && liveInfo.runningTools.length > 0) {
+          for (const t of liveInfo.runningTools) {
+            liveInner += renderRunningToolCardHtml(t.name, t.args, t.output);
+          }
+        }
+
+        liveInner += '</div>';
+        liveRow.innerHTML = liveInner;
+        container.appendChild(liveRow);
+      }
+
+      // 渲染记事本
+      renderNotes(view.notes);
+
+      // 渲染用量
+      const tokenEl = document.getElementById('stat-tokens');
+      if (tokenEl) {
+        tokenEl.textContent = formatUsageTokens(view.usage);
+      }
+
+      // 自动滚到底部
+      if (isNearBottom || autoScrollChat) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    // 工具卡片 HTML 构造
+    function renderToolCardHtml(name, args, result) {
+      const isDone = !!result;
+      const isError = result && !!result.isError;
+      const resultText = result ? (result.text || '') : '';
+      const isLong = resultText.length > 200;
+      const previewText = isLong ? resultText.slice(0, 200) + '…' : resultText;
+
+      const badgeClass = isError ? 'badge error' : (isDone ? 'badge done' : 'badge running');
+      const badgeText = isError ? '执行失败' : (isDone ? '已完成' : '执行中');
+
+      return `
+        <div class="tool-card ${isError ? 'error' : ''}">
+          <div class="tool-card-header">
+            <span class="tool-name-tag">🛠️ ${escapeHtml(name)}</span>
+            <span class="tool-badge ${badgeClass}">${badgeText}</span>
+          </div>
+          ${args ? `<div class="tool-args-box">${escapeHtml(formatToolArgs(args))}</div>` : ''}
+          ${isDone ? `
+            <div class="tool-result-box">
+              <div class="tool-result-content" id="tool-text-${escapeHtml(result.id || Math.random())}">${escapeHtml(previewText)}</div>
+              ${isLong ? `
+                <button
+                  class="tool-expand-btn"
+                  data-full="${escapeHtml(resultText)}"
+                  data-preview="${escapeHtml(previewText)}"
+                  onclick="toggleToolResultExpand(this)"
+                >展开全文（共 ${resultText.length} 字）</button>
+              ` : ''}
+            </div>
+          ` : `
+            <div class="tool-result-box" style="color: var(--text-muted); font-size: 12px;">
+              正在执行…
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    function renderRunningToolCardHtml(name, args, output) {
+      return `
+        <div class="tool-card">
+          <div class="tool-card-header">
+            <span class="tool-name-tag">⚙️ ${escapeHtml(name)}</span>
+            <span class="tool-badge running">运行中</span>
+          </div>
+          ${args ? `<div class="tool-args-box">${escapeHtml(formatToolArgs(args))}</div>` : ''}
+          <div class="tool-result-box" style="color: var(--primary); font-size: 12.5px;">
+            ${output ? escapeHtml(output) : '执行中…'}
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleToolResultExpand(btn) {
+      const contentEl = btn.previousElementSibling;
+      const fullText = btn.getAttribute('data-full');
+      const previewText = btn.getAttribute('data-preview');
+      const isExpanded = btn.getAttribute('data-expanded') === 'true';
+
+      if (isExpanded) {
+        contentEl.textContent = previewText;
+        btn.textContent = `展开全文（共 ${fullText.length} 字）`;
+        btn.setAttribute('data-expanded', 'false');
+      } else {
+        contentEl.textContent = fullText;
+        btn.textContent = '收起';
+        btn.setAttribute('data-expanded', 'true');
+      }
+    }
+
+    // 渲染记事本
+    function renderNotes(notes) {
+      const todoListEl = document.getElementById('todo-list');
+      const memoListEl = document.getElementById('memo-list');
+
+      if (todoListEl) {
+        todoListEl.innerHTML = '';
+        if (notes && Array.isArray(notes.todos) && notes.todos.length > 0) {
+          notes.todos.forEach(t => {
+            const item = document.createElement('div');
+            item.className = 'todo-item' + (t.done ? ' done' : '');
+            item.innerHTML = `
+              <input type="checkbox" ${t.done ? 'checked' : ''} disabled>
+              <span>${escapeHtml(t.text)}</span>
+            `;
+            todoListEl.appendChild(item);
+          });
+        } else {
+          todoListEl.innerHTML = '<span class="empty-placeholder">暂无待办事项</span>';
+        }
+      }
+
+      if (memoListEl) {
+        memoListEl.innerHTML = '';
+        if (notes && Array.isArray(notes.memos) && notes.memos.length > 0) {
+          notes.memos.forEach(m => {
+            const item = document.createElement('div');
+            item.className = 'memo-item';
+            item.innerHTML = `📌 <span>${escapeHtml(typeof m === 'string' ? m : m.text || JSON.stringify(m))}</span>`;
+            memoListEl.appendChild(item);
+          });
+        } else {
+          memoListEl.innerHTML = '<span class="empty-placeholder">暂无备忘录</span>';
+        }
+      }
+    }
+
+    // 忙碌状态控制
+    function updateBusyControls(isBusy, inboxCount) {
+      const steerToggle = document.getElementById('steer-toggle');
+      const btnAbort = document.getElementById('btn-abort');
+      const inboxBadge = document.getElementById('inbox-badge');
+
+      if (steerToggle) {
+        steerToggle.style.display = isBusy ? 'inline-flex' : 'none';
+      }
+      if (btnAbort) {
+        btnAbort.style.display = isBusy ? 'inline-flex' : 'none';
+      }
+      if (inboxBadge) {
+        if (inboxCount > 0) {
+          inboxBadge.textContent = `排队中：${inboxCount} 条`;
+          inboxBadge.style.display = 'inline-block';
+        } else {
+          inboxBadge.style.display = 'none';
+        }
+      }
+    }
+
+    // --- 消息发送与交互 ---
+    async function submitMessage() {
+      const textarea = document.getElementById('chat-textarea');
+      const text = (textarea.value || '').trim();
+      if (!text || !currentConversationId) return;
+
+      const steerCheckbox = document.getElementById('steer-checkbox');
+      const mode = steerCheckbox && steerCheckbox.checked ? 'steer' : 'followUp';
+      const requestId = generateUuid();
+
+      textarea.value = '';
+      textarea.style.height = 'auto';
+
+      try {
+        const res = await fetch(`/api/conversations/${encodeURIComponent(currentConversationId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, requestId, mode }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || '发送失败');
+        }
+        // 如果是新会话，改标题后刷新会话列表
+        fetchConversations();
+      } catch (err) {
+        alert('发送失败：' + err.message);
+        textarea.value = text;
+      }
+    }
+
+    async function abortCurrentTask() {
+      if (!currentConversationId) return;
+      try {
+        const res = await fetch(`/api/conversations/${encodeURIComponent(currentConversationId)}/abort`, {
+          method: 'POST',
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || '停止失败');
+        }
+      } catch (err) {
+        alert('停止失败：' + err.message);
+      }
+    }
+
+    // 从某条消息分叉
+    async function forkConversation(entryId) {
+      if (!currentConversationId || !entryId) return;
+      try {
+        const res = await fetch(`/api/conversations/${encodeURIComponent(currentConversationId)}/fork`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entryId }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || '分叉会话失败');
+        }
+        const data = await res.json();
+        // 切换到新分叉的会话
+        selectConversation(data.id);
+        await fetchConversations();
+      } catch (err) {
+        alert('分叉失败：' + err.message);
+      }
+    }
+
+    // --- 模拟崩溃二次确认 ---
+    const crashModal = document.getElementById('crash-modal');
+
+    function openCrashModal() {
+      crashModal.style.display = 'flex';
+    }
+
+    function closeCrashModal() {
+      crashModal.style.display = 'none';
+    }
+
+    function onModalBackdropClick(e) {
+      if (e.target === crashModal) {
+        closeCrashModal();
+      }
+    }
+
+    async function confirmCrash() {
+      closeCrashModal();
+      showReconnectBanner();
+      try {
+        const res = await fetch('/api/crash', { method: 'POST' });
+        if (!res.ok) {
+          console.warn('POST /api/crash 返回非 200');
+        }
+      } catch (err) {
+        console.log('模拟崩溃已触发，服务断开连接');
+      }
+    }
+
+    // --- 移动端抽屉控制 ---
+    function openSidebarDrawer() {
+      document.getElementById('sidebar-left').classList.add('open');
+      document.getElementById('drawer-backdrop').classList.add('open');
+    }
+
+    function closeSidebarDrawer() {
+      document.getElementById('sidebar-left').classList.remove('open');
+      document.getElementById('drawer-backdrop').classList.remove('open');
+    }
+
+    function scrollToNotes() {
+      const notesEl = document.getElementById('notes-card');
+      if (notesEl) {
+        notesEl.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // --- 事件监听与初始化 ---
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchServerInfo();
+      fetchConversations();
+
+      const textarea = document.getElementById('chat-textarea');
+      if (textarea) {
+        // 自适应高度
+        textarea.addEventListener('input', () => {
+          textarea.style.height = 'auto';
+          textarea.style.height = Math.min(textarea.scrollHeight, 140) + 'px';
+        });
+
+        // 避免中文输入法回车打字被当成提交
+        textarea.addEventListener('compositionstart', () => { isComposing = true; });
+        textarea.addEventListener('compositionend', () => { isComposing = false; });
+
+        textarea.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+            e.preventDefault();
+            submitMessage();
+          }
+        });
+      }
+
+      // 快捷键 ESC 关闭弹窗
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && crashModal.style.display === 'flex') {
+          closeCrashModal();
+        }
+      });
+
+      // 监听 Hash 变化（浏览器前进后退、多标签跳转）
+      window.addEventListener('hashchange', () => {
+        const hashId = parseHashConversationId();
+        if (hashId !== null && String(hashId) !== String(currentConversationId)) {
+          selectConversation(hashId);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

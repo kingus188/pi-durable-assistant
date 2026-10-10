@@ -1,0 +1,33 @@
+name: pi-durable-demo
+
+services:
+  pi-durable-demo:
+    build: .
+    image: pi-durable-demo:local
+    container_name: pi-durable-demo
+    # 进程崩溃后自动拉起，这是“断点恢复”演示的一半
+    restart: unless-stopped
+    env_file: .env
+    # 只绑本机回环，方便用 SSH 隧道自测；对外由 nginx 通过容器名反代
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3300}:3000"
+    volumes:
+      - pi-durable-demo-data:/data
+    mem_limit: 1g
+    cpus: 1.0
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - default
+      - sub2api
+
+volumes:
+  pi-durable-demo-data:
+
+networks:
+  sub2api:
+    external: true
+    name: ${SUB2API_NETWORK:-sub2api-deploy_sub2api-network}
