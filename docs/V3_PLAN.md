@@ -1,62 +1,101 @@
-# Pi Durable Demo v3 — 交付说明与后续计划
+# v3 第一阶段交付与第二阶段规划
 
-## 已完成
+> **当前状态：已于 2026-10-10 通过 [PR #1](https://github.com/xiaomoBoy/pi-durable-demo/pull/1) 合并到 `main`**。本文件既是 v3 功能边界说明，也记录回归修复与下一阶段待办。使用方法请先阅读 [README](../README.md)。
 
-本阶段保留 v1/v2 的演示能力，新增：
-- 可管理的持久计划：一次性/固定分钟间隔；支持暂停、恢复和取消；保存已执行次数与下次执行时间。
-- 后台子 Agent：conversation-owned background Task，子会话由后台任务持有；父对话不需等待；结果以 followUp 回传。
-- 可取消原有提醒；管理抽屉支持查看任务及后台子会话。
-- 可选飞书或通用 webhook 通知（默认仅失败）；会话 Markdown 导出。
-- 无前端框架、无额外生产 npm 依赖；Node 单测和 HTTP 冒烟测试。
+## 1. 第一阶段交付范围
 
-## 管理 API
-
-| 方法 | 路径 | 功能 |
+| 模块 | 已交付能力 | 核心实现 |
 | --- | --- | --- |
-| GET | /api/conversations/:id/management | 查看计划、提醒和后台子 Agent |
-| POST | /api/conversations/:id/schedules | 创建计划：text, minutesFromNow, everyMinutes?, requestId? |
-| POST | /api/conversations/:id/schedules/:uuid/pause | 暂停 |
-| POST | /api/conversations/:id/schedules/:uuid/resume | 恢复 |
-| POST | /api/conversations/:id/schedules/:uuid/cancel | 取消 |
-| POST | /api/conversations/:id/background | 创建后台 Agent：text, requestId? |
-| POST | /api/conversations/:id/background/:uuid/stop | 停止后台 Agent |
-| POST | /api/conversations/:id/reminders/:id/cancel | 取消提醒 |
-| GET | /api/conversations/:id/export.md | 导出对话 Markdown |
+| 持久计划 | 一次性 / 固定分钟间隔；暂停、恢复、取消；最近/下次执行与运行次数 | `Schedules` Document + `ScheduleTask` |
+| 后台子 Agent | 独立子会话、非阻塞执行、进程重启恢复、结果回传、人工停止 | `BackgroundJobs` + `BackgroundTask` |
+| 提醒管理 | 旧版提醒的列表、取消和可选 Webhook | `Reminders` + `ReminderTask` |
+| 管理 UI | 独立抽屉，可在网页右下角打开 | `public/v3.js` |
+| 通知 | 通用 JSON Webhook 或飞书机器人；`errors`/`all`/`off` | `notifyEvent` |
+| 成果导出 | 当前会话的用户和助手文本导出为 Markdown | `export.md` |
+| 回归测试 | Node 语法检查、单测、HTTP、安全与崩溃恢复测试 | `npm run check`、`npm test` |
 
-## 启动、部署与验收
+兼容性约束：继续使用 Node ESM、SQLite、Pi Durable **1.1.0**；保留 v1/v2 的聊天、记事本、Fork、前台子 Agent 和多端 SSE 功能；未引入前端框架或新的 npm 运行时依赖。
 
-本地：依次运行 npm ci、npm run check、npm test、LLM_API=faux npm run dev。打开 http://localhost:3000，新建会话，右下角“任务中心”里创建任务。
+## 2. 接口与数据语义
 
-Docker 延用既有 compose。NODE_ENV=production 时必须设置 DEMO_PASSWORD，否则拒绝启动；生产默认禁止 /api/crash。需要录制崩溃视频才设置 ENABLE_CRASH_DEMO=1。
+所有 HTTP 接口延用原有 Basic Auth（配置了 `DEMO_PASSWORD` 时）及同源写操作保护。
 
-可选环境变量：NOTIFY_WEBHOOK_URL（默认空）、NOTIFY_WEBHOOK_KIND（generic/feishu，默认 generic）、NOTIFY_MODE（errors/all/off，默认 errors）。通用通知内容为 id/type/text/failed/at，附带 X-Pi-Event-ID 供下游去重。推送目前是尽力而为，不承诺 exactly-once；如果必须保证到达，后续需要 outbox。
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/api/conversations/:id/management` | 当前会话的计划、提醒和后台任务；异常终止任务展示失败状态 |
+| POST | `/api/conversations/:id/schedules` | `{text,minutesFromNow,everyMinutes?,requestId?}` |
+| POST | `/api/conversations/:id/schedules/:uuid/pause` | 暂停；已休眠的旧 Task 不能继续有效触发 |
+| POST | `/api/conversations/:id/schedules/:uuid/resume` | 恢复；若已错过时间点，则重新安排未来触发 |
+| POST | `/api/conversations/:id/schedules/:uuid/cancel` | 取消计划 |
+| POST | `/api/conversations/:id/background` | `{text,requestId?}` 创建后台子 Agent |
+| POST | `/api/conversations/:id/background/:uuid/stop` | 请求停止后台任务 |
+| POST | `/api/conversations/:id/reminders/:taskId/cancel` | 取消未触发的旧提醒 |
+| GET | `/api/conversations/:id/export.md` | 导出当前会话文字 |
 
-计划任务重复按固定分钟间隔，不保证本地时区夏令时后的“每天同一钟点”；长时间停机跳过错过的间隔，不补发积压。取消任务会请求 Durable abort，极端情况下已经投递到 inbox 的消息无法撤销。
+参数约束：首次延迟 0.25～525600 分钟，重复间隔为 `0` 或 1～525600 分钟；计划文本最多 1000 字，后台任务最多 4000 字。`requestId` 最多 100 字，特殊属性名会被拒绝。重复提交同一个 requestId 返回该任务**当前状态**，不会创建第二份任务。
 
-## v3 下一阶段清单（本 PR 未实现）
+### 持久语义
 
-- 带时区的日历/Cron/RRULE；修改计划的具体时间和内容。
-- Webhook 持久 outbox、失败重试/去重、更多通知渠道。
-- 多模型配置、准确的 Token / 缓存 / 账单计费。
-- 增量 SSE、长会话分页与渲染性能优化。
-- 安全的外部工具和写操作审批、持久文件 Artifacts、独立产物库。
-- 高并发、模拟崩溃、长时间运行等更多集成/E2E 测试。
+- 周期 Task 经过持久检查点入库，到时间后向主会话提交 `[计划任务]` follow-up；下一次执行时间基于上次计划时间推进。大段停机后跳过错过的周期，避免积压风暴。
+- 后台任务由会话拥有，且设置 `background: true`；子会话由后台 Task 拥有，子 Agent 执行完成后结果以 `[后台任务结果]` follow-up 回报。任务报告路径使用稳定的 requestId 去重。
+- 对于已取消任务，在投递阶段会重新检查状态。但**取消不是完全事务化的“撤销已经进入 inbox 的消息”**：极端竞争窗口内，提交成功的内容仍可能被 Agent 处理。
+- `faux` 测试验证过一次性计划和后台子 Agent 的进程重启恢复，并非所有真实模型行为的保证。
 
-本 PR 仅通过静态与 CI 测试才能视为可合并；不要把“README 说明”代替上线验证。
+## 3. 配置与操作
 
-## v3 第一阶段回归审计（2026-10-10）
+本地（Node ≥22.13）：
 
-本轮审计在 PR #1 中修复了以下实际缺陷：
+~~~bash
+npm ci
+npm run check
+npm test
+LLM_API=faux npm run dev
+~~~
 
-- 接口把 JSON null/数组/字符串当成对象使用，原本会产生 500；现在返回 400。
-- requestId 使用普通对象存储；特殊属性名（__proto__ / constructor / prototype）可能造成错误的“重复请求”判定；现已验证并拒绝保留名称，长度超出上限直接返回 400。
-- 幂等重试曾返回创建当时的状态，即使任务已经取消；现在返回当前任务状态。
-- 回写 HTTP 之前先序列化 JSON，避免异常时发出 200/201 却无响应体。
-- 在提醒和后台子 Agent 的最后投递阶段增加了取消状态核对。
-- SSE 的活动任务范围包含后台子 Agent 子会话；任务异常终止时管理页不再长期误显示为“运行中”。
-- 管理抽屉定时请求加上会话/请求序列校验，避免切换会话后显示旧会话的数据。
-- 未设置访问口令时，非生产环境服务仅监听 127.0.0.1；生产环境继续强制设置 DEMO_PASSWORD。
-- 外部 webhook 失败日志隐藏原始错误详情，避免 URL 中的签名或密钥被日志带出。
-- 新增异常请求、生产鉴权、关闭崩溃按钮的安全回归测试。
+浏览器访问 http://localhost:3000 ，新建会话，右下角打开「任务中心」。
 
-剩余已知限制：任务提交和人工取消存在不可完全消除的竞争窗口，已经进入会话 inbox 的提醒/结果不能撤销；通知仍是尽力投递，不含 outbox 和自动重试；尚未进行真实浏览器 UI/生产 VPS 的端到端验收；长会话 SSE 与任务数量没有实施分页及资源配额。这些不属于本轮已验证的能力，不能声称“零 Bug”或“正式生产级”。
+Docker 运行：
+
+~~~bash
+cp .env.example .env
+# 配置 DEMO_PASSWORD 和模型；生产环境必须有密码
+docker compose up -d --build
+~~~
+
+默认 Docker 对宿主机仅开放 `127.0.0.1:3300`，需要 Nginx HTTPS 反向代理。无密码的本地 Node 开发模式只监听 loopback；`NODE_ENV=production` 时无口令拒绝启动。生产默认禁止模拟崩溃接口，需要演示时才暂时将 `ENABLE_CRASH_DEMO=1`。持久卷不要随意删除，更新前备份。
+
+通知配置：
+
+~~~dotenv
+NOTIFY_WEBHOOK_URL=
+NOTIFY_WEBHOOK_KIND=generic
+NOTIFY_MODE=errors
+~~~
+
+`errors` 仅对明确失败的后台任务触发通知；如需正常提醒或周期计划触发推送，请设 `NOTIFY_MODE=all`。未设置 URL 则不会外部通知。飞书使用 `feishu` 消息格式，其他接收方使用 `generic` JSON；均为尽力投递，没有 outbox/持久重试。详情见 README。
+
+## 4. 质量审计和 Bug 修复记录
+
+[PR #1](https://github.com/xiaomoBoy/pi-durable-demo/pull/1) 合并前完成以下修复：
+
+1. JSON `null`/数组/字符串不再进入业务逻辑导致 500，而是明确 400。
+2. 幂等 requestId 禁止 `__proto__`、`constructor`、`prototype`，对过长键报错，避免原型链属性误判；重试时返回当前状态。
+3. HTTP 返回先完成 JSON 序列化再写入响应头，避免成功状态码附带空正文。
+4. 提醒与后台子 Agent 在投递前增加取消状态检查，降低取消后回报的竞态风险。
+5. 任务管理视图能显示 Durable Task 异常终止；实时任务树纳入后台子 Agent 子会话。
+6. 管理页面异步刷新增加会话和请求版本校验，避免旧会话数据覆盖。
+7. 本地无密码默认只绑定 loopback；生产环境必须鉴权；模拟崩溃接口默认禁止。
+8. Webhook 失败日志不直接输出潜在包含签名的 URL/错误信息；测试增加鉴权与恶意请求场景。
+
+**合并前 CI：8 项测试全通过（8 passed，0 failed）**，覆盖基本 CRUD、请求校验、生产鉴权、任务状态、重启后一次性计划和后台子 Agent 恢复。未进行真实模型/浏览器/生产 VPS 的完整 E2E 验证。
+
+## 5. 第二阶段待办（尚未实现）
+
+- **带时区的日历任务**：Cron/RRULE、按当地时间每日/每周执行，修改任务内容与计划时间。
+- **可靠通知**：持久 outbox、发送重试、失败记录、去重与更丰富的推送渠道。
+- **模型与成本**：会话级模型选择、真实费率、缓存读写 Token、费用报表。
+- **任务与产物**：可筛选的任务历史、失败重试策略、文件型报告与 Artifacts、审批式外部工具。
+- **长会话性能**：SSE 增量化、历史分页或虚拟列表、数据与后台任务数量限制。
+- **上线验收**：真实 Docker/HTTPS 环境、浏览器 UI、多设备、并发与长时间稳定性测试。
+
+**边界说明**：v3 第一阶段是可运行的单用户个人 Agent，并非多租户平台；未提供强一致外部通知和精确本地日历调度。进入第二阶段前建议先备份并验证 VPS 上现有 SQLite 数据。
