@@ -130,10 +130,12 @@ async function simplifyView(conversationId, value) {
 	const notes = (await harness.snapshot(Notes, conversationId, ctx)) ?? {};
 	const reminders = (await harness.snapshot(Reminders, conversationId, ctx))?.items ?? [];
 	const subagents = (await harness.snapshot(Delegations, conversationId, ctx))?.items ?? [];
+	const backgroundChildren = (await harness.snapshot(BackgroundJobs, conversationId, ctx))?.items ?? [];
 	const children = (await harness.snapshot(Index, ctx))?.children ?? {};
 	const v3Children = (await harness.snapshot(Parents, ctx))?.children ?? {};
 	// 本会话和它派出的子会话里还活着的任务
-	const mine = new Set([conversationId, ...subagents.map((a) => a.conversationId)]);
+	const mine = new Set([conversationId, ...subagents.map((a) => a.conversationId),
+		...backgroundChildren.map((a) => a.conversationId).filter((id) => id != null)]);
 	const tasks = Object.values(taskGraph.value?.tasks ?? {})
 		.filter((t) => mine.has(t.conversationId))
 		.map((t) => ({
@@ -277,9 +279,22 @@ async function route(req, res) {
 				harness.snapshot(BackgroundJobs, conversation.id, ctx),
 				harness.snapshot(Reminders, conversation.id, ctx),
 			]);
+			// Durable Task 异常终结时，不应继续向用户展示为“运行中”。
+			const backgroundItems = await Promise.all((background?.items ?? []).map(async (item) => {
+				if (item.status !== "running" || item.taskId == null) return item;
+				const task = await harness.getTask(item.taskId, ctx);
+				if (task?.state.status !== "terminal") return item;
+				return { ...item, status: "failed", result: item.result || "后台任务异常终止；请检查服务日志" };
+			}));
+			const scheduleItems = await Promise.all((schedules?.items ?? []).map(async (item) => {
+				if (item.status !== "active" || item.jobId == null) return item;
+				const task = await harness.getTask(item.jobId, ctx);
+				if (task?.state.status !== "terminal") return item;
+				return { ...item, status: "failed" };
+			}));
 			return sendJson(res, 200, {
-				schedules: schedules?.items ?? [],
-				background: background?.items ?? [],
+				schedules: scheduleItems,
+				background: backgroundItems,
 				reminders: reminders?.items ?? [],
 			});
 		}
