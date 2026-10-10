@@ -20,7 +20,9 @@ async function post(origin, path, data = {}) {
   const response = await fetch(origin + path, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data),
   });
-  const body = await response.json();
+  const raw = await response.text();
+  if (!raw) throw new Error("接口返回空响应：" + path + " HTTP " + response.status);
+  const body = JSON.parse(raw);
   assert.equal(response.status < 400, true, JSON.stringify(body));
   return body;
 }
@@ -36,7 +38,7 @@ async function launch(dataDir, port) {
   const origin = "http://127.0.0.1:" + port;
   for (let i = 0; i < 100; i++) {
     if (child.exitCode !== null) throw new Error("服务启动失败：" + logs);
-    try { const r = await fetch(origin + "/api/info"); if (r.ok) return { child, origin }; } catch {}
+    try { const r = await fetch(origin + "/api/info"); if (r.ok) return { child, origin, getLogs: () => logs }; } catch {}
     await new Promise((r) => setTimeout(r, 100));
   }
   child.kill("SIGKILL");
@@ -78,6 +80,9 @@ test("创建、管理、持久化和导出接口（无需 API Key）", { timeout
     app = await launch(dir, await freePort());
     const afterRestart = await (await fetch(app.origin + prefix + "/management")).json();
     assert.equal(afterRestart.schedules[0].id, created.item.id);
+  } catch (error) {
+    console.error("集成测试异常时服务输出：", app?.getLogs?.());
+    throw error;
   } finally {
     if (app) await stop(app.child);
     await rm(dir, { recursive: true, force: true });
