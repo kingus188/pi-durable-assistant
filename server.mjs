@@ -32,8 +32,9 @@ function exitIfFatal(error) {
 }
 
 function sendJson(res, status, body) {
+	const payload = JSON.stringify(body);
 	res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-	res.end(JSON.stringify(body));
+	res.end(payload);
 }
 
 async function readBody(req) {
@@ -46,8 +47,11 @@ async function readBody(req) {
 	}
 	if (size === 0) return {};
 	try {
-		return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-	} catch {
+		const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+		if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new HttpError(400, "请求体必须是 JSON 对象");
+		return parsed;
+	} catch (error) {
+		if (error instanceof HttpError) throw error;
 		throw new HttpError(400, "请求不是合法 JSON");
 	}
 }
@@ -298,7 +302,7 @@ async function route(req, res) {
 				const item = await conversation.commit((tx) =>
 					scheduleInTx(tx, conversation.id, body, typeof body.requestId === "string" ? body.requestId.slice(0, 100) : null), ctx);
 				return sendJson(res, 201, { item });
-			} catch (error) { if (/任务内容|首次执行|重复间隔/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+			} catch (error) { if (/任务内容|首次执行|重复间隔|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
 		if (method === "POST" && resource === "schedules" && itemId && ["pause", "resume", "cancel"].includes(action)) {
 			try {
@@ -323,7 +327,7 @@ async function route(req, res) {
 				const item = await conversation.commit((tx) =>
 					backgroundInTx(tx, conversation.id, body, typeof body.requestId === "string" ? body.requestId.slice(0, 100) : null), ctx);
 				return sendJson(res, 201, { item });
-			} catch (error) { if (/后台任务说明/.test(error.message)) throw new HttpError(400, error.message); throw error; }
+			} catch (error) { if (/后台任务说明|requestId/.test(error.message)) throw new HttpError(400, error.message); throw error; }
 		}
 		if (method === "POST" && resource === "background" && itemId && action === "stop") {
 			const item = await conversation.commit(async (tx) => {
@@ -398,6 +402,7 @@ const server = createServer(async (req, res) => {
 if (process.env.NODE_ENV === "production" && !config.password) {
 	throw new Error("生产环境必须设置 DEMO_PASSWORD");
 }
-server.listen(config.port, "0.0.0.0", () => {
+const bindHost = config.password ? "0.0.0.0" : "127.0.0.1";
+server.listen(config.port, bindHost, () => {
 	console.log(`pi-durable-demo 已启动：端口 ${config.port}，模型 ${modelLabel}，PID ${process.pid}`);
 });
