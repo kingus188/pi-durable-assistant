@@ -4,7 +4,7 @@
 
 [简体中文 README](README.md) · [Getting started](docs/GETTING_STARTED.md) · [Configuration](docs/CONFIGURATION.md) · [Deployment](docs/DEPLOYMENT.md)
 
-[![CI](https://github.com/xiaomoBoy/pi-durable-assistant/actions/workflows/v3-ci.yml/badge.svg)](https://github.com/xiaomoBoy/pi-durable-assistant/actions/workflows/v3-ci.yml)
+[![CI](https://github.com/kingus188/pi-durable-assistant/actions/workflows/v3-ci.yml/badge.svg)](https://github.com/kingus188/pi-durable-assistant/actions/workflows/v3-ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ![Pi Durable Assistant web interface with conversations and task status](docs/screenshot.png)
@@ -31,12 +31,12 @@ Unlike a disposable chatbot session, this project wraps the Pi Durable runtime i
 | Notes search | Optional read-only search of an allowlisted Obsidian vault, with path and line citations. Nothing is written back |
 | Conversation list | Archive or remove a chat from the menu. Archive also stops that chat's unfinished reminders, schedules and background jobs. Removal drops the menu row only |
 
-**Tech stack:** Node.js 22+, native ESM JavaScript, Pi Durable 1.1.0, SQLite, Docker Compose. No front-end build pipeline or external database server required.
+**Tech stack:** Node.js 22+, TypeScript with native ESM, Pi Durable 1.1.0, SQLite, Docker Compose. Compiled with `tsc`; no frontend framework, bundler or external database server required.
 
 ## Quick start — no API key
 
 ```bash
-git clone https://github.com/xiaomoBoy/pi-durable-assistant.git
+git clone https://github.com/kingus188/pi-durable-assistant.git
 cd pi-durable-assistant
 npm ci
 npm run check
@@ -84,14 +84,29 @@ See [deployment and backup guidance](docs/DEPLOYMENT.md), [troubleshooting](docs
 
 ## Project layout and tests
 
-`server.mjs` exposes HTTP and SSE; `lib/agent.mjs` wires the Durable Harness; `lib/v3.mjs` handles scheduled/background work; `lib/personal.mjs` holds cross-session memory and skills; `lib/knowledge.mjs` searches an allowlisted Obsidian vault; `lib/attachments.mjs` parses browser uploads; `lib/wechat.mjs` handles the WeChat bridge. The front end lives in `public/index.html`, `public/app.js`, `public/style.css`, and `public/v3.js`.
+The repository uses npm workspaces with two applications and four private packages:
+
+- `apps/server`: startup, HTTP/SSE, authentication and application use cases.
+- `apps/web`: native TypeScript browser UI, organized by feature.
+- `packages/contracts`: shared HTTP/SSE types without Node or SDK dependencies.
+- `packages/runtime`: models, sessions, Harness and SQLite lifecycle.
+- `packages/features`: assistant tools, tasks, notes, memory, skills and knowledge search.
+- `packages/channel-wechat`: WeChat bindings, inbound processing and the durable reply queue.
 
 ```bash
 npm ci
 npm run check
 npm test
+LLM_API=faux npm run dev
 ```
 
+Builds follow TypeScript project references. `check` also enforces dependency boundaries and detects cycles. Each workspace has its own build/check/test commands, for example `npm test --workspace @assistant/features`. Web builds copy HTML/CSS into `apps/web/dist/`; production starts with `node apps/server/dist/main.js` after building. `dev` restarts exited processes but does not watch source files. Docker compiles in a build stage and installs only production dependencies in its runtime stage.
+
+Existing SQLite documents, task versions and HTTP/SSE paths are preserved. See [Architecture and development](docs/ARCHITECTURE.md) for package boundaries and migration constraints.
+
+
 For the full usage guide, environment variables, recovery caveats and release status, see the [Chinese README](README.md) and linked documents. Report reproducible bugs with versions, steps and sanitized logs.
+
+Based on [xiaomoBoy/pi-durable-assistant](https://github.com/xiaomoBoy/pi-durable-assistant), retaining the original MIT license and copyright notice. Historical PR links refer to that project.
 
 **License:** [MIT](LICENSE). Not affiliated with the official Pi Durable or WeChat teams.

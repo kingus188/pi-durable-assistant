@@ -10,7 +10,7 @@
 - 已在模型服务商设置 API 预算和额度限制；本项目不会替你阻止高额调用。
 
 ```bash
-git clone https://github.com/xiaomoBoy/pi-durable-assistant.git
+git clone https://github.com/kingus188/pi-durable-assistant.git
 cd pi-durable-assistant
 cp .env.example .env
 ```

@@ -1,6 +1,6 @@
 # 配置参考（当前 main）
 
-本页基于 `.env.example`、`lib/agent.mjs`、`lib/v3.mjs`、`lib/wechat.mjs` 和 `compose.yaml` 的**当前主分支实现**。请先按 [快速开始](GETTING_STARTED.md) 使用 `faux` 确认项目可正常启动，再填写真实凭据。
+本页基于 `.env.example`、`apps/server/src/config.ts`、`packages/features/src/tasks/index.ts`、`packages/channel-wechat/src/index.ts` 和 `compose.yaml` 的**当前主分支实现**。请先按 [快速开始](GETTING_STARTED.md) 使用 `faux` 确认项目可正常启动，再填写真实凭据。
 
 ## 环境变量
 

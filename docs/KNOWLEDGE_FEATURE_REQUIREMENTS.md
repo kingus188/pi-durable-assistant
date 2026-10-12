@@ -88,7 +88,7 @@ Obsidian 已是个人事实/策略的权威来源，不在 Pi Durable 再建第�
 
 ## 共用非功能性约束
 
-- **单用户优先、最小化复杂度**：尽量复用现有 `server.mjs`、`lib/` ESM、Durable Documents/Tasks、SQLite、Webhook / WeChat 通道，不预设多租户、消息总线、大型向量数据库或新的前端框架。
+- **单用户优先、最小化复杂度**：尽量复用现有 `apps/server/src/main.ts`、`packages/` ESM、Durable Documents/Tasks、SQLite、Webhook / WeChat 通道，不预设多租户、消息总线、大型向量数据库或新的前端框架。
 - **权限与数据隔离**：网页 Basic Auth 不等于知识库授权；微信 Channel 须校验具体授权身份和可访问范围。默认不在微信暴露财务、健康、家庭及服务器资产。
 - **确定性和可恢复**：外部写入、审批、投递应有稳定 `requestId`、明确状态、失败重试/冲突处理；不能把“至少一次投递”说成端到端恰好一次。
 - **人机分工**：查询可自动，候选可自动，改变权威事实、外部发布及高影响操作必须符合目录规则与用户审批。

@@ -1,4 +1,4 @@
-name: v3 checks
+name: workspace checks
 on:
   push:
     branches: [main, "feat/v3-task-center"]
@@ -16,4 +16,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run build --workspaces
       - run: npm test

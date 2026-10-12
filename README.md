@@ -5,7 +5,7 @@
 **Self-hosted AI agent with crash recovery, durable workflows, background subagents, scheduled tasks, SQLite persistence, a browser UI and an optional WeChat bridge.** [English README](README.en.md)
 
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-43853d?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![CI](https://github.com/xiaomoBoy/pi-durable-assistant/actions/workflows/v3-ci.yml/badge.svg)](https://github.com/xiaomoBoy/pi-durable-assistant/actions/workflows/v3-ci.yml)
+[![CI](https://github.com/kingus188/pi-durable-assistant/actions/workflows/v3-ci.yml/badge.svg)](https://github.com/kingus188/pi-durable-assistant/actions/workflows/v3-ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **项目状态：个人单用户项目 / 可体验的实验性实现，不是 Pi Durable 官方产品。** 当前 `main` 包含 v3 任务中心、网页附件、微信适配、需批准的跨会话记忆，以及只读笔记检索。文件审批和可靠通知增强仍在独立 PR 中，**未合并到主分支**。生产环境请自行做好 HTTPS、访问控制和 SQLite 备份。
@@ -16,7 +16,7 @@
 
 普通聊天机器人在进程退出后往往丢失正在执行的工作。这个项目把 Pi Durable 的任务、会话和 Document 持久化机制封装为**一个可以打开浏览器实际使用的个人 Agent**。可在任务进行中重启进程，再查看恢复后的执行结果；同时保留 SQLite 中的会话与任务状态。
 
-核心技术：**Pi Durable 1.1.0 / Node.js 22 / SQLite / 原生 JavaScript + SSE / Docker Compose**。不需要前端构建或独立数据库服务。
+核心技术：**Pi Durable 1.1.0 / Node.js 22 / SQLite / TypeScript + 原生浏览器界面 + SSE / Docker Compose**。使用 `tsc` 编译，不需要前端框架、打包器或独立数据库服务。
 
 ## 已实现的功能
 
@@ -43,7 +43,7 @@
 需要 **Node.js ≥ 22.13**、npm 和 Git：
 
 ```bash
-git clone https://github.com/xiaomoBoy/pi-durable-assistant.git
+git clone https://github.com/kingus188/pi-durable-assistant.git
 cd pi-durable-assistant
 npm ci
 npm run check
@@ -107,29 +107,35 @@ docker compose logs --tail=100 pi-durable-assistant
 | 提升 GitHub 站内搜索与项目展示 | [GitHub Discoverability / SEO 清单](docs/GITHUB_DISCOVERABILITY.md) |
 | 项目架构与历史设计说明 | [SPEC.md](SPEC.md) |
 
-## 技术结构
+## 技术结构与开发
 
-- `server.mjs`：HTTP API、鉴权、SSE、静态文件与消息处理。
-- `lib/agent.mjs`：Pi Durable Harness、模型与 Agent 工具。
-- `lib/v3.mjs`：周期任务、后台 Subagent、管理命令和可选通知。
-- `lib/personal.mjs`：跨会话记忆、技能候选和提示注入。
-- `lib/knowledge.mjs`：Obsidian 白名单只读检索。
-- `lib/attachments.mjs`：网页图片/文本附件的校验与转换。
-- `lib/wechat.mjs`：微信通道的会话绑定和消息持久化。
-- `public/index.html` + `public/app.js` + `public/style.css`：浏览器聊天 UI。
-- `public/v3.js`：任务中心抽屉，不需要前端打包工具。
-- `tests/`：Node 测试、HTTP 集成、模拟断点恢复和微信通道回归。
+项目采用 **npm workspaces：两个应用、四个包**，全部使用严格 TypeScript。
+
+- `apps/server`：服务启动、HTTP/SSE、鉴权和跨模块业务用例。
+- `apps/web`：原生浏览器界面，按聊天、会话、任务中心和个人资料拆分。
+- `packages/contracts`：前后端共同使用的接口类型。
+- `packages/runtime`：模型接入、会话索引、Harness 和 SQLite 生命周期。
+- `packages/features`：笔记、附件、任务、子 Agent、长期记忆、技能和知识检索。
+- `packages/channel-wechat`：微信消息适配、绑定与持久发送队列。
+- `tests/integration`：跨模块接口与崩溃恢复回归；各模块的单元测试随包存放。
 
 ```bash
 npm ci
 npm run check
 npm test
+LLM_API=faux npm run dev
 ```
 
-CI 使用本地 `faux` 模型和模拟通道，不等于真实微信扫码、生产模型、真实浏览器和 VPS 的端到端验收。若要反馈问题，请附操作系统、Node/Docker 版本、复现步骤及**已脱敏**的错误日志。
+`check` 检查类型和模块边界；`build` 按包依赖顺序编译；`start`、`dev` 和 `test` 都会先构建。已有产物可直接用 `node apps/server/dist/main.js` 启动。修改源码后需要重新构建；`dev` 保留进程退出自动重启行为，不提供文件监听。
 
-长期记忆和技能只存在本机 SQLite，不会写回 Obsidian。从菜单删除会话只去掉列表项，本机记录还在。归档会停掉该会话未完成的提醒、计划和后台任务。知识库默认只开放三个内容目录，财务、个人档案和服务器资产不在检索范围内。
+工作区可独立开发，例如 `npm test --workspace @assistant/features`、`npm run build --workspace @assistant/web`。完整目录、依赖方向、单包命令和兼容约束见 [架构与开发约定](docs/ARCHITECTURE.md)。
+
+迁移保持现有 HTTP/SSE 路径、SQLite 文档和持久任务版本；旧数据无需转换。CI 使用本地 `faux` 模型和模拟通道，不代表真实微信、真实模型、浏览器和 VPS 验收。
+
+长期记忆和技能只存在本机 SQLite，不会写回 Obsidian。从菜单删除会话只去掉列表项，本机记录还在。归档会停掉该会话未完成的提醒、计划和后台任务。
 
 ## 许可证
+
+本项目基于 [xiaomoBoy/pi-durable-assistant](https://github.com/xiaomoBoy/pi-durable-assistant) 继续开发，保留原作者 MIT 许可证与版权声明。文中历史 PR 链接指向原项目。
 
 [MIT](LICENSE)。本项目并非 Pi Durable、微信或任何模型服务商的官方发行版。

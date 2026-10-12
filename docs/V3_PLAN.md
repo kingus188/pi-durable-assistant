@@ -9,10 +9,10 @@
 | 持久计划 | 一次性 / 固定分钟间隔；暂停、恢复、取消；最近/下次执行与运行次数 | `Schedules` Document + `ScheduleTask` |
 | 后台子 Agent | 独立子会话、非阻塞执行、进程重启恢复、结果回传、人工停止 | `BackgroundJobs` + `BackgroundTask` |
 | 提醒管理 | 旧版提醒的列表、取消和可选 Webhook | `Reminders` + `ReminderTask` |
-| 管理 UI | 独立抽屉，可在网页右下角打开 | `public/v3.js` |
+| 管理 UI | 独立抽屉，可在网页右下角打开 | `apps/web/src/tasks/center.ts` |
 | 通知 | 通用 JSON Webhook 或飞书机器人；`errors`/`all`/`off` | `notifyEvent` |
 | 成果导出 | 当前会话的用户和助手文本导出为 Markdown | `export.md` |
-| 回归测试 | Node 语法检查、单测、HTTP、安全与崩溃恢复测试 | `npm run check`、`npm test` |
+| 回归测试 | TypeScript 严格类型检查、单测、HTTP、安全与崩溃恢复测试 | `npm run check`、`npm test` |
 
 兼容性约束：继续使用 Node ESM、SQLite、Pi Durable **1.1.0**；保留 v1/v2 的聊天、记事本、Fork、前台子 Agent 和多端 SSE 功能；未引入前端框架或新的 npm 运行时依赖。
 

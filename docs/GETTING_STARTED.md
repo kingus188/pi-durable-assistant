@@ -11,7 +11,7 @@
 ## A. 本机运行（推荐第一步）
 
 ```bash
-git clone https://github.com/xiaomoBoy/pi-durable-assistant.git
+git clone https://github.com/kingus188/pi-durable-assistant.git
 cd pi-durable-assistant
 node --version
 npm ci
